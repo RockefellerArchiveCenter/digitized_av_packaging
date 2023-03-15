@@ -1,0 +1,22 @@
+dist: bionic
+language: python
+cache: pip
+
+before_script:
+  - pip install tox
+
+script: tox
+
+matrix:
+  include:
+
+    - python: "3.10"
+      env: TOXENV=py310
+
+    # Linters
+
+    - python: "3.10"
+      env: TOXENV=linting
+
+notifications:
+  email: false
