@@ -1,5 +1,6 @@
 import os
 
+
 class Packager(object):
 
     def __init__(self, format, refid):
@@ -15,7 +16,6 @@ class Packager(object):
         self.add_rights_ids(self.rights_ids)
         self.compress_bag(self.refid)
         self.deliver_package(self.refid)
-
 
     def discover_files(self, bag_dir):
         """Lists all files in a directory."""
