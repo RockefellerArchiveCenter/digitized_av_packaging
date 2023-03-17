@@ -72,7 +72,7 @@ class Packager(object):
                 ffmpeg
                 .input(Path(bag_dir, f'{self.refid}_a.mp4'))
                 .filter('thumbnail', 300)
-                .output(str(poster), **{'frames:v': 1})
+                .output(str(poster), loglevel="quiet", **{'frames:v': 1})
                 .run()
             )
 
