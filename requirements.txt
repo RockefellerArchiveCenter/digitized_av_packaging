@@ -12,6 +12,10 @@ botocore==1.29.90
     # via
     #   boto3
     #   s3transfer
+ffmpeg-python==0.2.0
+    # via -r requirements.in
+future==0.18.3
+    # via ffmpeg-python
 jmespath==1.0.1
     # via
     #   boto3
