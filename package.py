@@ -11,7 +11,8 @@ import ffmpeg
 class Packager(object):
 
     def __init__(self, format, refid, rights_ids, tmp_dir, source_bucket, destination_bucket,
-                 destination_bucket_moving_image_mezzanine, destination_bucket_moving_image_access, destination_bucket_audio_access, destination_bucket_poster):
+                 destination_bucket_moving_image_mezzanine, destination_bucket_moving_image_access,
+                 destination_bucket_audio_access, destination_bucket_poster, sns_topic):
         self.format = format
         self.refid = refid
         self.rights_ids = rights_ids
@@ -22,8 +23,14 @@ class Packager(object):
         self.destination_bucket_moving_image_access = destination_bucket_moving_image_access
         self.destination_bucket_audio_access = destination_bucket_audio_access
         self.destination_bucket_poster = destination_bucket_poster
+        self.sns_topic = sns_topic
         if self.format not in ['audio', 'moving image']:
             raise Exception(f"Unable to process format {self.format}")
+        self.sns = boto3.client(
+            'sns',
+            region_name=os.environ.get('AWS_REGION_NAME', 'us-east-1'),
+            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+            aws_secret_access_key=os.environ.get('AWS_ACCESS_KEY_ID'))
         self.s3 = boto3.client(
             's3',
             region_name=os.environ.get('AWS_REGION_NAME', 'us-east-1'),
@@ -37,13 +44,19 @@ class Packager(object):
 
     def run(self):
         """Main method, which calls all other methods."""
-        bag_dir = Path(self.tmp_dir, self.refid)
-        self.download_files(bag_dir)
-        self.create_poster(bag_dir)
-        self.deliver_derivatives()
-        self.create_bag(bag_dir, self.rights_ids)
-        compressed_path = self.compress_bag(bag_dir)
-        self.deliver_package(compressed_path)
+        try:
+            bag_dir = Path(self.tmp_dir, self.refid)
+            self.download_files(bag_dir)
+            self.create_poster(bag_dir)
+            self.deliver_derivatives()
+            self.create_bag(bag_dir, self.rights_ids)
+            compressed_path = self.compress_bag(bag_dir)
+            self.deliver_package(compressed_path)
+            self.cleanup_successful_job()
+            self.deliver_success_notification()
+        except Exception as e:
+            self.cleanup_failed_job(bag_dir)
+            self.deliver_failure_notification(e)
 
     def download_files(self, bag_dir):
         """Downloads files from S3 to local storage."""
@@ -59,9 +72,6 @@ class Packager(object):
                 filename,
                 f"{self.tmp_dir}/{filename}",
                 Config=self.transfer_config)
-        self.s3.delete_objects(
-            Bucket=self.source_bucket,
-            Delete={'Objects': [{'Key': obj['Key']} for obj in to_download]})
         return list(Path().glob(f"{bag_dir}/*"))
 
     def create_poster(self, bag_dir):
@@ -130,6 +140,69 @@ class Packager(object):
             Config=self.transfer_config)
         package_path.unlink()
 
+    def cleanup_successful_job(self):
+        """Remove artifacts from successful job."""
+        to_delete = self.s3.list_objects_v2(
+            Bucket=self.source_bucket,
+            Prefix=self.refid)['Contents']
+        self.s3.delete_objects(
+            Bucket=self.source_bucket,
+            Delete={'Objects': [{'Key': obj['Key']} for obj in to_delete]})
+
+    def cleanup_failed_job(self, bag_dir):
+        """Remove artifacts from failed job."""
+        if bag_dir.is_dir():
+            rmtree(bag_dir)
+        Path(f"{bag_dir}.tar.gz").unlink(missing_ok=True)
+
+    def deliver_success_notification(self):
+        """Sends notifications after successful run."""
+        self.sns.publish(
+            TopicArn=self.sns_topic,
+            Message=f'{self.format} package {self.refid} successfully packaged',
+            MessageAttributes={
+                'format': {
+                    'DataType': 'String',
+                    'StringValue': self.format,
+                },
+                'refid': {
+                    'DataType': 'String',
+                    'StringValue': self.refid,
+                },
+                'outcome': {
+                    'DataType': 'String',
+                    'StringValue': 'PACKAGED',
+                }
+            })
+
+    def deliver_failure_notification(self, exception):
+        """"Sends notifications when run fails.
+
+        Args:
+            exception (Exception): the exception that was thrown.
+        """
+        self.sns.publish(
+            TopicArn=self.sns_topic,
+            Message=f'{self.format} package {self.refid} failed packaging',
+            MessageAttributes={
+                'format': {
+                    'DataType': 'String',
+                    'StringValue': self.format,
+                },
+                'refid': {
+                    'DataType': 'String',
+                    'StringValue': self.refid,
+                },
+                'outcome': {
+                    'DataType': 'String',
+                    'StringValue': 'PACKAGING FAILED',
+                },
+                'message': {
+                    'DataType': 'String',
+                    'StringValue': str(exception),
+                }
+            })
+
 
 if __name__ == '__main__':
     format = os.environ.get('FORMAT')
@@ -145,6 +218,7 @@ if __name__ == '__main__':
     destination_bucket_audio_access = os.environ.get(
         'AWS_DESTINATION_BUCKET_AUDIO_ACCESS')
     destination_bucket_poster = os.environ.get('AWS_DESTINATION_BUCKET_POSTER')
+    sns_topic = os.environ.get('AWS_SNS_TOPIC')
     Packager(
         format,
         refid,
@@ -155,4 +229,5 @@ if __name__ == '__main__':
         destination_bucket_moving_image_mezzanine,
         destination_bucket_moving_image_access,
         destination_bucket_audio_access,
-        destination_bucket_poster).run()
+        destination_bucket_poster,
+        sns_topic).run()
