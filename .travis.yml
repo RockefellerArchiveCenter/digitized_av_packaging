@@ -4,6 +4,7 @@ cache: pip
 
 before_script:
   - pip install tox
+  - apt-get update && apt-get install ffmpeg
 
 script: tox
 
