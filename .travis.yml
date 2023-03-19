@@ -4,7 +4,7 @@ cache: pip
 
 before_script:
   - pip install tox
-  - if [ -z ${var+x} == py310 ]; then sudo apt-get update && sudo apt-get install ffmpeg; fi
+  - if [ ${TOXENV} = py310 ]; then sudo apt-get update && sudo apt-get install ffmpeg; fi
 
 script: tox
 
