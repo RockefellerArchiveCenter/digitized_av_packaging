@@ -4,7 +4,6 @@ cache: pip
 
 before_script:
   - pip install tox
-  - sudo apt-get update && sudo apt-get install ffmpeg
 
 script: tox
 
@@ -13,6 +12,7 @@ matrix:
 
     - python: "3.10"
       env: TOXENV=py310
+      before_script: sudo apt-get update && sudo apt-get install ffmpeg
 
     # Linters
 
