@@ -4,6 +4,7 @@ cache: pip
 
 before_script:
   - pip install tox
+  - if [ -z ${var+x} == py310 ]; then sudo apt-get update && sudo apt-get install ffmpeg; fi
 
 script: tox
 
@@ -12,7 +13,6 @@ matrix:
 
     - python: "3.10"
       env: TOXENV=py310
-      before_script: sudo apt-get update && sudo apt-get install ffmpeg
 
     # Linters
 
