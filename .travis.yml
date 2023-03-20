@@ -4,6 +4,7 @@ cache: pip
 
 before_script:
   - pip install tox
+  - if [ ${FFMPEG} = true ]; then sudo apt-get update && sudo apt-get install ffmpeg; fi
 
 script: tox
 
@@ -11,7 +12,9 @@ matrix:
   include:
 
     - python: "3.10"
-      env: TOXENV=py310
+      env: 
+        - TOXENV=py310
+        - FFMPEG=true
 
     # Linters
 
