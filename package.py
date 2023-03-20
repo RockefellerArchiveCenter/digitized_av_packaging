@@ -59,7 +59,11 @@ class Packager(object):
             self.deliver_failure_notification(e)
 
     def download_files(self, bag_dir):
-        """Downloads files from S3 to local storage."""
+        """Downloads files from S3 to local storage.
+
+        Args:
+            bag_dir (pathlib.Path): directory containing local files.
+        """
         if not bag_dir.is_dir():
             bag_dir.mkdir()
         to_download = self.s3.list_objects_v2(
@@ -75,7 +79,11 @@ class Packager(object):
         return list(Path().glob(f"{bag_dir}/*"))
 
     def create_poster(self, bag_dir):
-        """Creates a poster image from a video file."""
+        """Creates a poster image from a video file.
+
+        Args:
+            bag_dir (pathlib.Path): directory containing local files.
+        """
         if self.format == 'moving image':
             poster = Path(bag_dir, 'poster.png')
             (
@@ -87,7 +95,11 @@ class Packager(object):
             )
 
     def derivative_map(self):
-        """Get information about derivatives to upload to S3."""
+        """Get information about derivatives to upload to S3.
+
+        Returns:
+            derivative_map (list of three-tuples): path, S3 bucket and mimetype of files.
+        """
         bag_path = Path(self.tmp_dir, self.refid)
         if self.format == 'moving image':
             return [
@@ -117,13 +129,25 @@ class Packager(object):
             obj_path.unlink()
 
     def create_bag(self, bag_dir, rights_ids):
-        """Creates a BagIt bag from a directory."""
+        """Creates a BagIt bag from a directory.
+
+        Args:
+            bag_dir (pathlib.Path): directory containing local files.
+            rights_ids (list): List of rights IDs to apply to the package.
+        """
         # TODO check metadata requirements
         metadata = {'RightsID': rights_ids}
         bagit.make_bag(bag_dir, metadata)
 
     def compress_bag(self, bag_dir):
-        """Creates a compressed archive file from a bag."""
+        """Creates a compressed archive file from a bag.
+
+        Args:
+            bag_dir (pathlib.Path): directory containing local files.
+
+        Returns:
+            compressed_path (pathlib.Path): path of compressed archive.
+        """
         compressed_path = Path(f"{bag_dir}.tar.gz")
         with tarfile.open(str(compressed_path), "w:gz") as tar:
             tar.add(bag_dir, arcname=Path(bag_dir).name)
@@ -131,7 +155,11 @@ class Packager(object):
         return compressed_path
 
     def deliver_package(self, package_path):
-        """Delivers packaged files to destination."""
+        """Delivers packaged files to destination.
+
+        Args:
+            package_path (pathlib.Path): path of compressed archive to upload.
+        """
         self.s3.upload_file(
             package_path,
             self.destination_bucket,
@@ -150,7 +178,11 @@ class Packager(object):
             Delete={'Objects': [{'Key': obj['Key']} for obj in to_delete]})
 
     def cleanup_failed_job(self, bag_dir):
-        """Remove artifacts from failed job."""
+        """Remove artifacts from failed job.
+
+        Args:
+            bag_dir (pathlib.Path): directory containing local files.
+        """
         if bag_dir.is_dir():
             rmtree(bag_dir)
         Path(f"{bag_dir}.tar.gz").unlink(missing_ok=True)
