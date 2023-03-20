@@ -60,7 +60,7 @@ class Packager(object):
 
     def download_files(self, bag_dir):
         """Downloads files from S3 to local storage.
-        
+
         Args:
             bag_dir (pathlib.Path): directory containing local files.
         """
@@ -80,7 +80,7 @@ class Packager(object):
 
     def create_poster(self, bag_dir):
         """Creates a poster image from a video file.
-        
+
         Args:
             bag_dir (pathlib.Path): directory containing local files.
         """
@@ -96,7 +96,7 @@ class Packager(object):
 
     def derivative_map(self):
         """Get information about derivatives to upload to S3.
-        
+
         Returns:
             derivative_map (list of three-tuples): path, S3 bucket and mimetype of files.
         """
@@ -130,7 +130,7 @@ class Packager(object):
 
     def create_bag(self, bag_dir, rights_ids):
         """Creates a BagIt bag from a directory.
-        
+
         Args:
             bag_dir (pathlib.Path): directory containing local files.
             rights_ids (list): List of rights IDs to apply to the package.
@@ -141,12 +141,12 @@ class Packager(object):
 
     def compress_bag(self, bag_dir):
         """Creates a compressed archive file from a bag.
-        
+
         Args:
             bag_dir (pathlib.Path): directory containing local files.
 
         Returns:
-            compressed_path (pathlib.Path): path of compressed archive.    
+            compressed_path (pathlib.Path): path of compressed archive.
         """
         compressed_path = Path(f"{bag_dir}.tar.gz")
         with tarfile.open(str(compressed_path), "w:gz") as tar:
@@ -156,7 +156,7 @@ class Packager(object):
 
     def deliver_package(self, package_path):
         """Delivers packaged files to destination.
-        
+
         Args:
             package_path (pathlib.Path): path of compressed archive to upload.
         """
@@ -179,7 +179,7 @@ class Packager(object):
 
     def cleanup_failed_job(self, bag_dir):
         """Remove artifacts from failed job.
-        
+
         Args:
             bag_dir (pathlib.Path): directory containing local files.
         """
