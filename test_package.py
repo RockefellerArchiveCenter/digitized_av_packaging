@@ -260,6 +260,7 @@ def test_cleanup_failed_job():
 @mock_sns
 @mock_sqs
 def test_deliver_success_notification():
+    """Assert success notifications are delivered as expected."""
     sns = boto3.client('sns', region_name='us-east-1')
     topic_arn = sns.create_topic(Name='my-topic')['TopicArn']
     sqs_conn = boto3.resource("sqs", region_name="us-east-1")
@@ -287,6 +288,7 @@ def test_deliver_success_notification():
 @mock_sns
 @mock_sqs
 def test_deliver_failure_notification():
+    """Asserts failure notifications are delivered as expected."""
     sns = boto3.client('sns', region_name='us-east-1')
     topic_arn = sns.create_topic(Name='my-topic')['TopicArn']
     sqs_conn = boto3.resource("sqs", region_name="us-east-1")
