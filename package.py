@@ -201,9 +201,13 @@ class Packager(object):
                     'DataType': 'String',
                     'StringValue': self.refid,
                 },
+                'service': {
+                    'DataType': 'String',
+                    'StringValue': 'digitized_av_packaging',
+                },
                 'outcome': {
                     'DataType': 'String',
-                    'StringValue': 'PACKAGED',
+                    'StringValue': 'SUCCESS',
                 }
             })
 
@@ -225,9 +229,13 @@ class Packager(object):
                     'DataType': 'String',
                     'StringValue': self.refid,
                 },
+                'service': {
+                    'DataType': 'String',
+                    'StringValue': 'digitized_av_packaging',
+                },
                 'outcome': {
                     'DataType': 'String',
-                    'StringValue': 'PACKAGING FAILED',
+                    'StringValue': 'FAILURE',
                 },
                 'message': {
                     'DataType': 'String',
