@@ -11,7 +11,7 @@ import ffmpeg
 class Packager(object):
 
     def __init__(self, format, refid, rights_ids, tmp_dir, source_bucket, destination_bucket,
-                 destination_bucket_moving_image_mezzanine, destination_bucket_moving_image_access,
+                 destination_bucket_video_mezzanine, destination_bucket_video_access,
                  destination_bucket_audio_access, destination_bucket_poster, sns_topic):
         self.format = format
         self.refid = refid
@@ -19,12 +19,12 @@ class Packager(object):
         self.tmp_dir = tmp_dir
         self.source_bucket = source_bucket
         self.destination_bucket = destination_bucket
-        self.destination_bucket_moving_image_mezzanine = destination_bucket_moving_image_mezzanine
-        self.destination_bucket_moving_image_access = destination_bucket_moving_image_access
+        self.destination_bucket_video_mezzanine = destination_bucket_video_mezzanine
+        self.destination_bucket_video_access = destination_bucket_video_access
         self.destination_bucket_audio_access = destination_bucket_audio_access
         self.destination_bucket_poster = destination_bucket_poster
         self.sns_topic = sns_topic
-        if self.format not in ['audio', 'moving image']:
+        if self.format not in ['audio', 'video']:
             raise Exception(f"Unable to process format {self.format}")
         self.sns = boto3.client(
             'sns',
@@ -84,7 +84,7 @@ class Packager(object):
         Args:
             bag_dir (pathlib.Path): directory containing local files.
         """
-        if self.format == 'moving image':
+        if self.format == 'video':
             poster = Path(bag_dir, 'poster.png')
             (
                 ffmpeg
@@ -101,13 +101,13 @@ class Packager(object):
             derivative_map (list of three-tuples): path, S3 bucket and mimetype of files.
         """
         bag_path = Path(self.tmp_dir, self.refid)
-        if self.format == 'moving image':
+        if self.format == 'video':
             return [
                 (bag_path / f"{self.refid}_me.mov",
-                 self.destination_bucket_moving_image_mezzanine,
+                 self.destination_bucket_video_mezzanine,
                  "video/quicktime"),
                 (bag_path / f"{self.refid}_a.mp4",
-                 self.destination_bucket_moving_image_access, "video/mp4"),
+                 self.destination_bucket_video_access, "video/mp4"),
                 (bag_path / "poster.png", self.destination_bucket_poster, "image/x-png")
             ]
         else:
@@ -251,10 +251,10 @@ if __name__ == '__main__':
     tmp_dir = os.environ.get('TMP_DIR')
     source_bucket = os.environ.get('AWS_SOURCE_BUCKET')
     destination_bucket = os.environ.get('AWS_DESTINATION_BUCKET')
-    destination_bucket_moving_image_mezzanine = os.environ.get(
-        'AWS_DESTINATION_BUCKET_MOVING_IMAGE_MEZZANINE')
-    destination_bucket_moving_image_access = os.environ.get(
-        'AWS_DESTINATION_BUCKET_MOVING_IMAGE_ACCESS')
+    destination_bucket_video_mezzanine = os.environ.get(
+        'AWS_DESTINATION_BUCKET_VIDEO_MEZZANINE')
+    destination_bucket_video_access = os.environ.get(
+        'AWS_DESTINATION_BUCKET_VIDEO_ACCESS')
     destination_bucket_audio_access = os.environ.get(
         'AWS_DESTINATION_BUCKET_AUDIO_ACCESS')
     destination_bucket_poster = os.environ.get('AWS_DESTINATION_BUCKET_POSTER')
@@ -266,8 +266,8 @@ if __name__ == '__main__':
         tmp_dir,
         source_bucket,
         destination_bucket,
-        destination_bucket_moving_image_mezzanine,
-        destination_bucket_moving_image_access,
+        destination_bucket_video_mezzanine,
+        destination_bucket_video_access,
         destination_bucket_audio_access,
         destination_bucket_poster,
         sns_topic).run()

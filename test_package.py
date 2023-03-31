@@ -13,8 +13,8 @@ from package import Packager
 
 DEFAULT_ARGS = ['audio', 'b90862f3baceaae3b7418c78f9d50d52', ["1", "2"], "tmp", "source", "destination",
                 "destination_mi_mezz", "destination_mi_access", "destination_audio_access", "destination_poster", "topic"]
-MOVING_IMAGE_ARGS = ['moving image', '20f8da26e268418ead4aa2365f816a08', ["1", "2"], "tmp", "source", "destination",
-                     "destination_mi_mezz", "destination_mi_access", "destination_audio_access", "destination-poster", "topic"]
+VIDEO_ARGS = ['video', '20f8da26e268418ead4aa2365f816a08', ["1", "2"], "tmp", "source", "destination",
+              "destination_mi_mezz", "destination_mi_access", "destination_audio_access", "destination-poster", "topic"]
 
 
 @pytest.fixture(autouse=True)
@@ -104,7 +104,7 @@ def test_download_files():
 
 def test_create_poster():
     """Asserts poster image is created as expected."""
-    packager = Packager(*MOVING_IMAGE_ARGS)
+    packager = Packager(*VIDEO_ARGS)
     fixture_path = Path('fixtures', packager.refid)
     tmp_path = Path(packager.tmp_dir, packager.refid)
     copytree(fixture_path, tmp_path)
@@ -125,17 +125,17 @@ def test_derivative_map_audio():
          'audio/mpeg')]
 
 
-def test_derivative_map_moving_image():
-    """Asserts information for moving image derivatives is correctly produced."""
-    packager = Packager(*MOVING_IMAGE_ARGS)
+def test_derivative_map_video():
+    """Asserts information for video derivatives is correctly produced."""
+    packager = Packager(*VIDEO_ARGS)
     bag_dir = Path(packager.tmp_dir, packager.refid)
     map = packager.derivative_map()
     assert len(map) == 3
     assert map == [
         (bag_dir / f"{packager.refid}_me.mov",
-            packager.destination_bucket_moving_image_mezzanine, "video/quicktime"),
+            packager.destination_bucket_video_mezzanine, "video/quicktime"),
         (bag_dir / f"{packager.refid}_a.mp4",
-            packager.destination_bucket_moving_image_access, "video/mp4"),
+            packager.destination_bucket_video_access, "video/mp4"),
         (bag_dir / "poster.png",
             packager.destination_bucket_poster, "image/x-png")]
 
@@ -143,7 +143,7 @@ def test_derivative_map_moving_image():
 @mock_s3
 def test_deliver_derivatives():
     """Assert derivatives are delivered to correct buckets and deleted locally."""
-    packager = Packager(*MOVING_IMAGE_ARGS)
+    packager = Packager(*VIDEO_ARGS)
     fixture_path = Path('fixtures', packager.refid)
     tmp_path = Path(packager.tmp_dir, packager.refid)
     copytree(fixture_path, tmp_path)
@@ -151,17 +151,17 @@ def test_deliver_derivatives():
     poster.touch()
 
     s3 = boto3.client('s3', region_name='us-east-1')
-    s3.create_bucket(Bucket=packager.destination_bucket_moving_image_access)
-    s3.create_bucket(Bucket=packager.destination_bucket_moving_image_mezzanine)
+    s3.create_bucket(Bucket=packager.destination_bucket_video_access)
+    s3.create_bucket(Bucket=packager.destination_bucket_video_mezzanine)
     s3.create_bucket(Bucket=packager.destination_bucket_poster)
 
     packager.deliver_derivatives()
 
     assert s3.get_object(
-        Bucket=packager.destination_bucket_moving_image_access,
+        Bucket=packager.destination_bucket_video_access,
         Key=f"{packager.refid}.mp4")
     assert s3.get_object(
-        Bucket=packager.destination_bucket_moving_image_mezzanine,
+        Bucket=packager.destination_bucket_video_mezzanine,
         Key=f"{packager.refid}.mov")
     assert s3.get_object(
         Bucket=packager.destination_bucket_poster,
@@ -281,7 +281,7 @@ def test_deliver_success_notification():
     messages = queue.receive_messages(MaxNumberOfMessages=1)
     message_body = json.loads(messages[0].body)
     assert message_body['MessageAttributes']['format']['Value'] == packager.format
-    assert message_body['MessageAttributes']['outcome']['Value'] == 'PACKAGED'
+    assert message_body['MessageAttributes']['outcome']['Value'] == 'SUCCESS'
     assert message_body['MessageAttributes']['refid']['Value'] == packager.refid
 
 
@@ -311,6 +311,6 @@ def test_deliver_failure_notification():
     messages = queue.receive_messages(MaxNumberOfMessages=1)
     message_body = json.loads(messages[0].body)
     assert message_body['MessageAttributes']['format']['Value'] == packager.format
-    assert message_body['MessageAttributes']['outcome']['Value'] == 'PACKAGING FAILED'
+    assert message_body['MessageAttributes']['outcome']['Value'] == 'FAILURE'
     assert message_body['MessageAttributes']['refid']['Value'] == packager.refid
     assert message_body['MessageAttributes']['message']['Value'] == exception_message
