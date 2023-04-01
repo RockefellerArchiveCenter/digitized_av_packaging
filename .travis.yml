@@ -8,6 +8,15 @@ before_script:
 
 script: tox
 
+before_deploy:
+  - docker build -t ${DOCKER_REPO} .
+  - if [ ! -d deploy_scripts ]; then git clone https://github.com/RockefellerArchiveCenter/deploy_scripts.git; fi
+deploy:
+  provider: script
+  script: bash deploy_scripts/containers/push_image_to_ecr.sh
+  on:
+    branch: base
+
 matrix:
   include:
 
