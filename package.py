@@ -6,6 +6,9 @@ from shutil import rmtree
 import bagit
 import boto3
 import ffmpeg
+from asnake.aspace import ASpace
+from asnake.utils import find_closest_value
+from dateutil import parser, relativedelta
 
 
 class Packager(object):
@@ -36,6 +39,12 @@ class Packager(object):
             region_name=os.environ.get('AWS_REGION_NAME', 'us-east-1'),
             aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
             aws_secret_access_key=os.environ.get('AWS_ACCESS_KEY_ID'))
+        self.as_client = ASpace(
+            baseurl=os.environ.get('AS_BASEURL', 'http://localhos:4567'),
+            username=os.environ.get('AS_USERNAME', 'admin'),
+            password=os.environ.get('AS_PASSWORD', 'admin')
+        ).client
+        self.as_repo = os.environ.get('AS_REPO', '2')
         self.transfer_config = boto3.s3.transfer.TransferConfig(
             multipart_threshold=1024 * 25,
             max_concurrency=10,
@@ -128,6 +137,48 @@ class Packager(object):
                 Config=self.transfer_config)
             obj_path.unlink()
 
+    def uri_from_refid(self, refid):
+        """Uses the find_by_id endpoint in AS to return the URI of an archival object."""
+        find_by_refid_url = f"repositories/{self.as_repo}/find_by_id/archival_objects?ref_id[]={refid}"
+        results = self.as_client.get(find_by_refid_url).json()
+        if len(results.get("archival_objects")) == 1:
+            return results['archival_objects'][0]['ref']
+        else:
+            raise Exception("{} results found for search {}. Expected one result.".format(
+                len(results.get("archival_objects")), find_by_refid_url))
+
+    def format_aspace_date(self, dates):
+        """Formats ASpace dates so that they can be parsed by Aquila.
+        Assumes beginning of month or year if a start date, and end of month or
+        year if an end date.
+
+        Args:
+            dates (dict): ArchivesSpace date JSON
+
+        Returns:
+            Tuple of a begin date and end date in format YYYY-MM-DD
+        """
+        begin_date = dates['begin']
+        end_date = None
+        if dates['date_type'] == 'single':
+            end_date = begin_date
+        else:
+            end_date = dates['end']
+        parsed_begin = parser.isoparse(begin_date)
+        parsed_end = parser.isoparse(end_date)
+        formatted_begin = parsed_begin.strftime('%Y-%m-%d')
+        if len(end_date) == 4:
+            formatted_end = (
+                parsed_end + relativedelta.relativedelta(
+                    month=12, day=31)).strftime('%Y-%m-%d')
+        elif len(end_date) == 7:
+            formatted_end = (
+                parsed_end + relativedelta.relativedelta(
+                    day=31)).strftime('%Y-%m-%d')
+        else:
+            formatted_end = end_date
+        return formatted_begin, formatted_end
+
     def create_bag(self, bag_dir, rights_ids):
         """Creates a BagIt bag from a directory.
 
@@ -135,8 +186,15 @@ class Packager(object):
             bag_dir (pathlib.Path): directory containing local files.
             rights_ids (list): List of rights IDs to apply to the package.
         """
-        # TODO check metadata requirements
-        metadata = {'RightsID': rights_ids}
+        obj_uri = self.uri_from_refid(bag_dir)
+        start_date, end_date = self.format_aspace_date(
+            find_closest_value(obj_uri, 'dates', self.as_client))
+        metadata = {
+            'ArchivesSpace-URI': obj_uri,
+            'Start-Date': start_date,
+            'End-Date': end_date,
+            'Origin': f'av_digitization_{self.format}',
+            'Rights-ID': rights_ids}
         bagit.make_bag(bag_dir, metadata)
 
     def compress_bag(self, bag_dir):
