@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from shutil import copyfile, copytree, rmtree
-from unittest.mock import patch
+from unittest.mock import DEFAULT, MagicMock, patch
 
 import bagit
 import boto3
@@ -24,9 +24,14 @@ def setup_and_teardown():
     if not tmp_dir.is_dir():
         tmp_dir.mkdir()
 
-    yield  # this is where the testing happens
+    mock_response = MagicMock()
+    mock_response.return_value.text = "v3.0.2"
 
-    rmtree(DEFAULT_ARGS[3])
+    with patch.multiple('asnake.client.web_client.ASnakeClient', get=mock_response, authorize=DEFAULT):
+
+        yield  # this is where the testing happens
+
+    rmtree(str(tmp_dir))
 
 
 def test_init():
@@ -172,8 +177,15 @@ def test_deliver_derivatives():
     assert not Path(tmp_path, "poster.png").is_file()
 
 
-def test_create_bag():
+@patch('package.Packager.format_aspace_date')
+@patch('package.Packager.uri_from_refid')
+def test_create_bag(mock_uri, mock_dates):
     """Asserts bag is created as expected."""
+    as_uri = "/repositories/2/archival_objects/1234"
+    as_dates = ('1999-01-01', '2000-12-31')
+    mock_uri.return_value = as_uri
+    mock_dates.return_value = as_dates
+
     packager = Packager(*DEFAULT_ARGS)
     fixture_path = Path('fixtures', packager.refid)
     tmp_path = Path(packager.tmp_dir, packager.refid)
@@ -182,7 +194,52 @@ def test_create_bag():
     packager.create_bag(tmp_path, packager.rights_ids)
     bag = bagit.Bag(str(tmp_path))
     assert bag.is_valid()
-    # TODO assert bag-info
+    for key in ['ArchivesSpace-URI', 'Start-Date',
+                'End-Date', 'Origin', 'Rights-ID']:
+        assert key in bag.info
+    assert bag.info['Origin'] == 'av_digitization_audio'
+    assert bag.info['ArchivesSpace-URI'] == as_uri
+    assert bag.info['Start-Date'] == as_dates[0]
+    assert bag.info['End-Date'] == as_dates[1]
+    assert bag.info['Rights-ID'] == DEFAULT_ARGS[2]
+
+
+@patch('asnake.client.web_client.ASnakeClient.get')
+def test_uri_from_refid(mock_get):
+    """Asserts refids are translated to URIs as expected."""
+    mock_get.return_value.text = "v3.0.2"
+    refid = '12345'
+    as_url = f'repositories/2/find_by_id/archival_objects?ref_id[]={refid}'
+    packager = Packager(*DEFAULT_ARGS)
+
+    with open(Path('fixtures', 'refid_single.json'), 'r') as df:
+        resp = json.load(df)
+        mock_get.return_value.json.return_value = resp
+        returned = packager.uri_from_refid(refid)
+        assert returned == '/repositories/2/archival_objects/929951'
+        mock_get.assert_called_with(as_url)
+
+    for fixture_path in ['refid_multiple.json', 'refid_none.json']:
+        with open(Path('fixtures', fixture_path), 'r') as df:
+            resp = json.load(df)
+            with pytest.raises(Exception):
+                mock_get.return_value.json.return_value = resp
+                packager.uri_from_refid(refid)
+
+
+def test_format_aspace_date():
+    """Asserts dates are formatted as expected."""
+    packager = Packager(*DEFAULT_ARGS)
+    for fixture_path, expected in [
+            ('date_year.json', ('1950-01-01', '1969-12-31')),
+            ('date_month.json', ('1950-03-01', '1969-04-30')),
+            ('date_day.json', ('1950-02-03', '1969-04-05')),
+            ('date_single.json', ('1950-01-01', '1950-12-31'))]:
+        with open(Path('fixtures', fixture_path), 'r') as df:
+            date_data = json.load(df)
+            returned = packager.format_aspace_date(date_data)
+            assert returned[0] == expected[0]
+            assert returned[1] == expected[1]
 
 
 def test_compress_bag():
