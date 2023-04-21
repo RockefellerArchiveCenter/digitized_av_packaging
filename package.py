@@ -33,12 +33,12 @@ class Packager(object):
             'sns',
             region_name=os.environ.get('AWS_REGION_NAME', 'us-east-1'),
             aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.environ.get('AWS_ACCESS_KEY_ID'))
+            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'))
         self.s3 = boto3.client(
             's3',
             region_name=os.environ.get('AWS_REGION_NAME', 'us-east-1'),
             aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.environ.get('AWS_ACCESS_KEY_ID'))
+            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'))
         self.as_client = ASpace(
             baseurl=os.environ.get('AS_BASEURL', 'http://localhos:4567'),
             username=os.environ.get('AS_USERNAME', 'admin'),
