@@ -312,7 +312,7 @@ def test_cleanup_successful_job():
 
     packager.cleanup_successful_job()
 
-    deleted = s3.list_objects(
+    deleted = s3.list_objects_v2(
         Bucket=packager.source_bucket,
         Prefix=packager.refid)['KeyCount']
     assert deleted == 0
