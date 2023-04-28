@@ -1,3 +1,4 @@
+import logging
 import os
 import tarfile
 from pathlib import Path
@@ -10,13 +11,15 @@ from asnake.aspace import ASpace
 from asnake.utils import find_closest_value
 from dateutil import parser, relativedelta
 
+logging.basicConfig(level=os.environ.get('LOGGING_LEVEL', logging.INFO))
+logging.getLogger("bagit").setLevel(logging.ERROR)
+
 
 class Packager(object):
 
-    def __init__(self, format, refid, rights_ids, tmp_dir, source_bucket, destination_bucket,
+    def __init__(self, refid, rights_ids, tmp_dir, source_bucket, destination_bucket,
                  destination_bucket_video_mezzanine, destination_bucket_video_access,
                  destination_bucket_audio_access, destination_bucket_poster, sns_topic):
-        self.format = format
         self.refid = refid
         self.rights_ids = rights_ids
         self.tmp_dir = tmp_dir
@@ -27,8 +30,6 @@ class Packager(object):
         self.destination_bucket_audio_access = destination_bucket_audio_access
         self.destination_bucket_poster = destination_bucket_poster
         self.sns_topic = sns_topic
-        if self.format not in ['audio', 'video']:
-            raise Exception(f"Unable to process format {self.format}")
         self.sns = boto3.client(
             'sns',
             region_name=os.environ.get('AWS_REGION_NAME', 'us-east-1'),
@@ -50,12 +51,16 @@ class Packager(object):
             max_concurrency=10,
             multipart_chunksize=1024 * 25,
             use_threads=True)
+        logging.debug(self.__dict__)
 
     def run(self):
         """Main method, which calls all other methods."""
+        logging.debug(
+            f'Packaging started for package {self.refid}.')
         try:
             bag_dir = Path(self.tmp_dir, self.refid)
-            self.download_files(bag_dir)
+            downloaded = self.download_files(bag_dir)
+            self.format = self.parse_format(downloaded)
             self.create_poster(bag_dir)
             self.deliver_derivatives()
             self.create_bag(bag_dir, self.rights_ids)
@@ -63,7 +68,10 @@ class Packager(object):
             self.deliver_package(compressed_path)
             self.cleanup_successful_job()
             self.deliver_success_notification()
+            logging.info(
+                f'{self.format} package {self.refid} successfully packaged.')
         except Exception as e:
+            logging.error(e)
             self.cleanup_failed_job(bag_dir)
             self.deliver_failure_notification(e)
 
@@ -85,7 +93,22 @@ class Packager(object):
                 filename,
                 f"{self.tmp_dir}/{filename}",
                 Config=self.transfer_config)
-        return list(Path().glob(f"{bag_dir}/*"))
+        file_list = list(Path().glob(f"{bag_dir}/*"))
+        logging.debug(file_list)
+        return file_list
+
+    def parse_format(self, file_list):
+        """Parses format information from file list.
+
+        Args:
+            file_list (list of pathlib.Path instances): List of filepaths in a bag.
+        """
+        if len(file_list) == 2 and any(
+                [f.suffix == '.mp3' for f in file_list]):
+            return 'audio'
+        elif len(file_list) == 3 and any([f.suffix == '.mp4' for f in file_list]):
+            return 'video'
+        raise Exception(f'Unrecognized package format for files {file_list}.')
 
     def create_poster(self, bag_dir):
         """Creates a poster image from a video file.
@@ -102,6 +125,7 @@ class Packager(object):
                 .output(str(poster), loglevel="quiet", **{'frames:v': 1})
                 .run()
             )
+        logging.debug('Poster file {poster} created.')
 
     def derivative_map(self):
         """Get information about derivatives to upload to S3.
@@ -136,6 +160,7 @@ class Packager(object):
                 ExtraArgs={'ContentType': content_type},
                 Config=self.transfer_config)
             obj_path.unlink()
+        logging.debug('Derivative files delivered.')
 
     def uri_from_refid(self, refid):
         """Uses the find_by_id endpoint in AS to return the URI of an archival object."""
@@ -196,6 +221,8 @@ class Packager(object):
             'Origin': f'av_digitization_{self.format}',
             'Rights-ID': rights_ids}
         bagit.make_bag(bag_dir, metadata)
+        logging.debug(
+            f'Bag created from {bag_dir} with Rights IDs {rights_ids}.')
 
     def compress_bag(self, bag_dir):
         """Creates a compressed archive file from a bag.
@@ -210,6 +237,7 @@ class Packager(object):
         with tarfile.open(str(compressed_path), "w:gz") as tar:
             tar.add(bag_dir, arcname=Path(bag_dir).name)
         rmtree(bag_dir)
+        logging.debug(f'Compressed bag {compressed_path} created.')
         return compressed_path
 
     def deliver_package(self, package_path):
@@ -225,6 +253,7 @@ class Packager(object):
             ExtraArgs={'ContentType': 'application/gzip'},
             Config=self.transfer_config)
         package_path.unlink()
+        logging.debug('Packaged delivered.')
 
     def cleanup_successful_job(self):
         """Remove artifacts from successful job."""
@@ -234,6 +263,7 @@ class Packager(object):
         self.s3.delete_objects(
             Bucket=self.source_bucket,
             Delete={'Objects': [{'Key': obj['Key']} for obj in to_delete]})
+        logging.debug('Cleanup from successful job completed.')
 
     def cleanup_failed_job(self, bag_dir):
         """Remove artifacts from failed job.
@@ -244,6 +274,7 @@ class Packager(object):
         if bag_dir.is_dir():
             rmtree(bag_dir)
         Path(f"{bag_dir}.tar.gz").unlink(missing_ok=True)
+        logging.debug('Cleanup from failed job completed.')
 
     def deliver_success_notification(self):
         """Sends notifications after successful run."""
@@ -268,6 +299,7 @@ class Packager(object):
                     'StringValue': 'SUCCESS',
                 }
             })
+        logging.debug('Success notification delivered.')
 
     def deliver_failure_notification(self, exception):
         """"Sends notifications when run fails.
@@ -300,10 +332,10 @@ class Packager(object):
                     'StringValue': str(exception),
                 }
             })
+        logging.debug('Failure notification delivered.')
 
 
 if __name__ == '__main__':
-    format = os.environ.get('FORMAT')
     refid = os.environ.get('REFID')
     rights_ids = os.environ.get('RIGHTS_IDS')
     tmp_dir = os.environ.get('TMP_DIR')
@@ -318,7 +350,6 @@ if __name__ == '__main__':
     destination_bucket_poster = os.environ.get('AWS_DESTINATION_BUCKET_POSTER')
     sns_topic = os.environ.get('AWS_SNS_TOPIC')
     Packager(
-        format,
         refid,
         rights_ids,
         tmp_dir,
