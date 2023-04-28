@@ -9,7 +9,7 @@ import pytest
 from moto import mock_s3, mock_sns, mock_sqs
 from moto.core import DEFAULT_ACCOUNT_ID
 
-from package import Packager
+from src.package import Packager
 
 AUDIO_ARGS = ['b90862f3baceaae3b7418c78f9d50d52', ["1", "2"], "tmp", "source", "destination",
               "destination_video_mezz", "destination_video_access", "destination_audio_access", "destination_poster", "topic"]
@@ -48,15 +48,15 @@ def setup_and_teardown():
     rmtree(str(tmp_dir))
 
 
-@patch('package.Packager.download_files')
-@patch('package.Packager.parse_format')
-@patch('package.Packager.create_poster')
-@patch('package.Packager.deliver_derivatives')
-@patch('package.Packager.create_bag')
-@patch('package.Packager.compress_bag')
-@patch('package.Packager.deliver_package')
-@patch('package.Packager.cleanup_successful_job')
-@patch('package.Packager.deliver_success_notification')
+@patch('src.package.Packager.download_files')
+@patch('src.package.Packager.parse_format')
+@patch('src.package.Packager.create_poster')
+@patch('src.package.Packager.deliver_derivatives')
+@patch('src.package.Packager.create_bag')
+@patch('src.package.Packager.compress_bag')
+@patch('src.package.Packager.deliver_package')
+@patch('src.package.Packager.cleanup_successful_job')
+@patch('src.package.Packager.deliver_success_notification')
 def test_run(mock_notification, mock_cleanup, mock_deliver, mock_compress, mock_create,
              mock_deliver_derivatives, mock_poster, mock_parse, mock_download):
     """Asserts run method calls other methods."""
@@ -78,9 +78,9 @@ def test_run(mock_notification, mock_cleanup, mock_deliver, mock_compress, mock_
     mock_download.assert_called_once_with(bag_dir)
 
 
-@patch('package.Packager.download_files')
-@patch('package.Packager.cleanup_failed_job')
-@patch('package.Packager.deliver_failure_notification')
+@patch('src.package.Packager.download_files')
+@patch('src.package.Packager.cleanup_failed_job')
+@patch('src.package.Packager.deliver_failure_notification')
 def test_run_with_exception(mock_notification, mock_cleanup, mock_download):
     packager = Packager(*AUDIO_ARGS)
     exception = Exception("Error downloading bag.")
@@ -119,8 +119,8 @@ def test_download_files():
     bucket_name = packager.source_bucket
     s3 = boto3.client('s3', region_name='us-east-1')
     s3.create_bucket(Bucket=bucket_name)
-    expected_len = len(list(Path().glob(f"fixtures/{packager.refid}/*")))
-    for obj_path in Path().glob(f"fixtures/{packager.refid}/*"):
+    expected_len = len(list(Path().glob(f"tests/fixtures/{packager.refid}/*")))
+    for obj_path in Path().glob(f"tests/fixtures/{packager.refid}/*"):
         s3.put_object(
             Bucket=bucket_name,
             Key=f"{packager.refid}/{obj_path.name}",
@@ -137,7 +137,7 @@ def test_download_files():
 
 def test_create_poster(video_packager):
     """Asserts poster image is created as expected."""
-    fixture_path = Path('fixtures', video_packager.refid)
+    fixture_path = Path('tests', 'fixtures', video_packager.refid)
     tmp_path = Path(video_packager.tmp_dir, video_packager.refid)
     copytree(fixture_path, tmp_path)
 
@@ -175,7 +175,7 @@ def test_deliver_derivatives():
     """Assert derivatives are delivered to correct buckets and deleted locally."""
     packager = Packager(*VIDEO_ARGS)
     packager.format = 'video'
-    fixture_path = Path('fixtures', packager.refid)
+    fixture_path = Path('tests', 'fixtures', packager.refid)
     tmp_path = Path(packager.tmp_dir, packager.refid)
     copytree(fixture_path, tmp_path)
     poster = tmp_path / "poster.png"
@@ -203,8 +203,8 @@ def test_deliver_derivatives():
     assert not Path(tmp_path, "poster.png").is_file()
 
 
-@patch('package.Packager.format_aspace_date')
-@patch('package.Packager.uri_from_refid')
+@patch('src.package.Packager.format_aspace_date')
+@patch('src.package.Packager.uri_from_refid')
 def test_create_bag(mock_uri, mock_dates, audio_packager):
     """Asserts bag is created as expected."""
     as_uri = "/repositories/2/archival_objects/1234"
@@ -212,7 +212,7 @@ def test_create_bag(mock_uri, mock_dates, audio_packager):
     mock_uri.return_value = as_uri
     mock_dates.return_value = as_dates
 
-    fixture_path = Path('fixtures', audio_packager.refid)
+    fixture_path = Path('tests', 'fixtures', audio_packager.refid)
     tmp_path = Path(audio_packager.tmp_dir, audio_packager.refid)
     copytree(fixture_path, tmp_path)
 
@@ -236,7 +236,7 @@ def test_uri_from_refid(mock_get, audio_packager):
     refid = '12345'
     as_url = f'repositories/2/find_by_id/archival_objects?ref_id[]={refid}'
 
-    with open(Path('fixtures', 'refid_single.json'), 'r') as df:
+    with open(Path('tests', 'fixtures', 'refid_single.json'), 'r') as df:
         resp = json.load(df)
         mock_get.return_value.json.return_value = resp
         returned = audio_packager.uri_from_refid(refid)
@@ -244,7 +244,7 @@ def test_uri_from_refid(mock_get, audio_packager):
         mock_get.assert_called_with(as_url)
 
     for fixture_path in ['refid_multiple.json', 'refid_none.json']:
-        with open(Path('fixtures', fixture_path), 'r') as df:
+        with open(Path('tests', 'fixtures', fixture_path), 'r') as df:
             resp = json.load(df)
             with pytest.raises(Exception):
                 mock_get.return_value.json.return_value = resp
@@ -258,7 +258,7 @@ def test_format_aspace_date(audio_packager):
             ('date_month.json', ('1950-03-01', '1969-04-30')),
             ('date_day.json', ('1950-02-03', '1969-04-05')),
             ('date_single.json', ('1950-01-01', '1950-12-31'))]:
-        with open(Path('fixtures', fixture_path), 'r') as df:
+        with open(Path('tests', 'fixtures', fixture_path), 'r') as df:
             date_data = json.load(df)
             returned = audio_packager.format_aspace_date(date_data)
             assert returned[0] == expected[0]
@@ -267,7 +267,7 @@ def test_format_aspace_date(audio_packager):
 
 def test_compress_bag(audio_packager):
     """Asserts compressed files are correctly created and original directory is removed."""
-    fixture_path = Path('fixtures', audio_packager.refid)
+    fixture_path = Path('tests', 'fixtures', audio_packager.refid)
     tmp_path = Path(audio_packager.tmp_dir, audio_packager.refid)
     copytree(fixture_path, tmp_path)
     bagit.make_bag(tmp_path)
@@ -282,7 +282,7 @@ def test_deliver_package():
     """Asserts compressed package is delivered and local copy is removed."""
     packager = Packager(*AUDIO_ARGS)
     compressed_file = f"{packager.refid}.tar.gz"
-    fixture_path = Path('fixtures', compressed_file)
+    fixture_path = Path('tests', 'fixtures', compressed_file)
     tmp_path = Path(packager.tmp_dir, compressed_file)
     copyfile(fixture_path, tmp_path)
     s3 = boto3.client('s3', region_name='us-east-1')
@@ -320,12 +320,15 @@ def test_cleanup_successful_job():
 
 def test_cleanup_failed_job(audio_packager):
     """Asserts failed job is cleaned up as expected."""
-    fixture_path = Path("fixtures", "b90862f3baceaae3b7418c78f9d50d52")
-    compressed_fixture_path = Path("fixtures",
-                                   "b90862f3baceaae3b7418c78f9d50d52.tar.gz")
+    fixture_path = Path(
+        'tests',
+        'fixtures',
+        'b90862f3baceaae3b7418c78f9d50d52')
+    compressed_fixture_path = Path('tests', 'fixtures',
+                                   'b90862f3baceaae3b7418c78f9d50d52.tar.gz')
     tmp_path = Path(audio_packager.tmp_dir, audio_packager.refid)
     compressed_tmp_path = Path(audio_packager.tmp_dir,
-                               "b90862f3baceaae3b7418c78f9d50d52.tar.gz")
+                               'b90862f3baceaae3b7418c78f9d50d52.tar.gz')
     copytree(fixture_path, tmp_path)
     copyfile(compressed_fixture_path, compressed_tmp_path)
 

@@ -2,15 +2,14 @@ FROM python:3.10-slim as base
 RUN apt update -y && apt install -y \
   ffmpeg
 WORKDIR /code
-ADD requirements.txt .
+COPY requirements.txt .
 RUN pip install -r requirements.txt
-COPY package.py .
+COPY src src
 
 FROM base as test
 COPY test_requirements.txt .coveragerc ./
 RUN pip install -r test_requirements.txt
-COPY fixtures fixtures
-COPY test_package.py .
+COPY tests tests
 
 FROM base as build
-CMD [ "python", "package.py" ]
+CMD [ "python", "src/package.py" ]
