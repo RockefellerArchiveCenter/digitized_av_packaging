@@ -314,8 +314,8 @@ def test_cleanup_successful_job():
 
     deleted = s3.list_objects(
         Bucket=packager.source_bucket,
-        Prefix=packager.refid).get('Contents', [])
-    assert len(deleted) == 0
+        Prefix=packager.refid)['KeyCount']
+    assert deleted == 0
 
 
 def test_cleanup_failed_job(audio_packager):
