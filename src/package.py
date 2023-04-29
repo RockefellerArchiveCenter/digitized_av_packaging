@@ -21,7 +21,7 @@ class Packager(object):
                  destination_bucket_video_mezzanine, destination_bucket_video_access,
                  destination_bucket_audio_access, destination_bucket_poster, sns_topic):
         self.refid = refid
-        self.rights_ids = rights_ids
+        self.rights_ids = [r.strip() for r in rights_ids.split(',')]
         self.tmp_dir = tmp_dir
         self.source_bucket = source_bucket
         self.destination_bucket = destination_bucket
