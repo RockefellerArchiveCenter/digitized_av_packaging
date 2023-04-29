@@ -93,7 +93,7 @@ class Packager(object):
                 filename,
                 f"{self.tmp_dir}/{filename}",
                 Config=self.transfer_config)
-        file_list = list(Path().glob(f"{bag_dir}/*"))
+        file_list = list(Path(self.tmp_dir).glob(f"{bag_dir}/*"))
         logging.debug(file_list)
         return file_list
 
