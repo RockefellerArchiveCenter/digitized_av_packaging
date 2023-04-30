@@ -11,7 +11,9 @@ from asnake.aspace import ASpace
 from asnake.utils import find_closest_value
 from dateutil import parser, relativedelta
 
-logging.basicConfig(level=int(os.environ.get('LOGGING_LEVEL', logging.INFO)))
+logging.basicConfig(
+    level=int(os.environ.get('LOGGING_LEVEL', logging.INFO)),
+    format='%(filename)s::%(funcname)s::%(lineno)s %(message)s')
 logging.getLogger("bagit").setLevel(logging.ERROR)
 
 
