@@ -93,7 +93,7 @@ class Packager(object):
                 filename,
                 f"{self.tmp_dir}/{filename}",
                 Config=self.transfer_config)
-        file_list = list(Path(self.tmp_dir).glob(f"{bag_dir}/*"))
+        file_list = list(bag_dir.glob("*"))
         logging.debug(file_list)
         return file_list
 
@@ -309,11 +309,11 @@ class Packager(object):
         """
         self.sns.publish(
             TopicArn=self.sns_topic,
-            Message=f'{self.format} package {self.refid} failed packaging',
+            Message=f'{getattr(self, "format", "unknown format")} package {self.refid} failed packaging',
             MessageAttributes={
                 'format': {
                     'DataType': 'String',
-                    'StringValue': self.format,
+                    'StringValue': getattr(self, 'format', 'unknown format'),
                 },
                 'refid': {
                     'DataType': 'String',
