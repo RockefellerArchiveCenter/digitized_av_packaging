@@ -213,7 +213,7 @@ class Packager(object):
         """
         obj_uri = self.uri_from_refid(bag_dir.name)
         start_date, end_date = self.format_aspace_date(
-            find_closest_value(obj_uri, 'dates', self.as_client))
+            find_closest_value(obj_uri, 'dates', self.as_client)[0])
         metadata = {
             'ArchivesSpace-URI': obj_uri,
             'Start-Date': start_date,
