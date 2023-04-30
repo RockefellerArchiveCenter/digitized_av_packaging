@@ -211,7 +211,7 @@ class Packager(object):
             bag_dir (pathlib.Path): directory containing local files.
             rights_ids (list): List of rights IDs to apply to the package.
         """
-        obj_uri = self.uri_from_refid(bag_dir)
+        obj_uri = self.uri_from_refid(bag_dir.name)
         start_date, end_date = self.format_aspace_date(
             find_closest_value(obj_uri, 'dates', self.as_client))
         metadata = {
