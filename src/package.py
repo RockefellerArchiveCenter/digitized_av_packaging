@@ -11,7 +11,7 @@ from asnake.aspace import ASpace
 from asnake.utils import find_closest_value
 from dateutil import parser, relativedelta
 
-logging.basicConfig(level=os.environ.get('LOGGING_LEVEL', logging.INFO))
+logging.basicConfig(level=int(os.environ.get('LOGGING_LEVEL', logging.INFO)))
 logging.getLogger("bagit").setLevel(logging.ERROR)
 
 
@@ -153,6 +153,8 @@ class Packager(object):
         """Uploads derivatives to S3 buckets and deletes them from temporary storage."""
         to_upload = self.derivative_map()
         for obj_path, bucket, content_type in to_upload:
+            logging.debug(
+                f'Uploading {obj_path} to bucket {bucket} with content type {content_type}')
             self.s3.upload_file(
                 str(obj_path),
                 bucket,
