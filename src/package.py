@@ -222,7 +222,7 @@ class Packager(object):
             'ArchivesSpace-URI': obj_uri,
             'Start-Date': start_date,
             'End-Date': end_date,
-            'Origin': f'av_digitization_{self.format}',
+            'Origin': 'av_digitization',
             'Rights-ID': rights_ids}
         bagit.make_bag(bag_dir, metadata)
         logging.debug(

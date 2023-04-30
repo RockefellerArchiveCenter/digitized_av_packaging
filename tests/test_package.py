@@ -222,7 +222,7 @@ def test_create_bag(mock_uri, mock_dates, audio_packager):
     for key in ['ArchivesSpace-URI', 'Start-Date',
                 'End-Date', 'Origin', 'Rights-ID']:
         assert key in bag.info
-    assert bag.info['Origin'] == 'av_digitization_audio'
+    assert bag.info['Origin'] == 'av_digitization'
     assert bag.info['ArchivesSpace-URI'] == as_uri
     assert bag.info['Start-Date'] == as_dates[0]
     assert bag.info['End-Date'] == as_dates[1]
