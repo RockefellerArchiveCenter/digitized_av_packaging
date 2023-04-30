@@ -11,9 +11,9 @@ from moto.core import DEFAULT_ACCOUNT_ID
 
 from src.package import Packager
 
-AUDIO_ARGS = ['b90862f3baceaae3b7418c78f9d50d52', ["1", "2"], "tmp", "source", "destination",
+AUDIO_ARGS = ['b90862f3baceaae3b7418c78f9d50d52', "1,2", "tmp", "source", "destination",
               "destination_video_mezz", "destination_video_access", "destination_audio_access", "destination_poster", "topic"]
-VIDEO_ARGS = ['20f8da26e268418ead4aa2365f816a08', ["1", "2"], "tmp", "source", "destination",
+VIDEO_ARGS = ['20f8da26e268418ead4aa2365f816a08', "1,2", "tmp", "source", "destination",
               "destination_video_mezz", "destination_video_access", "destination_audio_access", "destination_poster", "topic"]
 
 
@@ -226,7 +226,7 @@ def test_create_bag(mock_uri, mock_dates, audio_packager):
     assert bag.info['ArchivesSpace-URI'] == as_uri
     assert bag.info['Start-Date'] == as_dates[0]
     assert bag.info['End-Date'] == as_dates[1]
-    assert bag.info['Rights-ID'] == AUDIO_ARGS[1]
+    assert bag.info['Rights-ID'] == AUDIO_ARGS[1].split(',')
 
 
 @patch('asnake.client.web_client.ASnakeClient.get')
