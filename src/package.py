@@ -73,7 +73,7 @@ class Packager(object):
             logging.info(
                 f'{self.format} package {self.refid} successfully packaged.')
         except Exception as e:
-            logging.error(e)
+            logging.exception(e)
             self.cleanup_failed_job(bag_dir)
             self.deliver_failure_notification(e)
 
