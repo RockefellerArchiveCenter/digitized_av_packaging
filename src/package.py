@@ -223,7 +223,8 @@ class Packager(object):
             'Start-Date': start_date,
             'End-Date': end_date,
             'Origin': 'av_digitization',
-            'Rights-ID': rights_ids}
+            'Rights-ID': rights_ids,
+            'BagIt-Profile-Identifier': 'zorya_bagit_profile.json'}
         bagit.make_bag(bag_dir, metadata)
         logging.debug(
             f'Bag created from {bag_dir} with Rights IDs {rights_ids}.')

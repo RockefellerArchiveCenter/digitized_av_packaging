@@ -220,13 +220,14 @@ def test_create_bag(mock_uri, mock_dates, audio_packager):
     bag = bagit.Bag(str(tmp_path))
     assert bag.is_valid()
     for key in ['ArchivesSpace-URI', 'Start-Date',
-                'End-Date', 'Origin', 'Rights-ID']:
+                'End-Date', 'Origin', 'Rights-ID', 'BagIt-Profile-Identifier']:
         assert key in bag.info
     assert bag.info['Origin'] == 'av_digitization'
     assert bag.info['ArchivesSpace-URI'] == as_uri
     assert bag.info['Start-Date'] == as_dates[0]
     assert bag.info['End-Date'] == as_dates[1]
     assert bag.info['Rights-ID'] == AUDIO_ARGS[1].split(',')
+    assert bag.info['BagIt-Profile-Identifier'] == 'zorya_bagit_profile.json'
 
 
 @patch('asnake.client.web_client.ASnakeClient.get')
