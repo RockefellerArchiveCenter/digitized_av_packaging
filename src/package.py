@@ -176,26 +176,42 @@ class Packager(object):
             raise Exception("{} results found for search {}. Expected one result.".format(
                 len(results.get("archival_objects")), find_by_refid_url))
 
-    def format_aspace_date(self, dates):
+    def get_date_range(self, dates_array):
+        """Gets maximum and minimum dates from an AS date array.
+
+        Args:
+            dates (list of dicts): ArchivesSpace date list
+
+        Returns:
+            start_date (str): earliest date in date list.
+            end_date (str): latest date in date list
+        """
+        start_dates = []
+        end_dates = []
+        for date in dates_array:
+            start_dates.append(date['begin'])
+            if date['date_type'] == 'single':
+                end_dates.append(date['begin'])
+            else:
+                end_dates.append(date['end'])
+        return sorted(start_dates)[0], sorted(end_dates)[-1]
+
+    def format_aspace_date(self, start_date, end_date):
         """Formats ASpace dates so that they can be parsed by Aquila.
         Assumes beginning of month or year if a start date, and end of month or
         year if an end date.
 
         Args:
-            dates (dict): ArchivesSpace date JSON
+            start_date (str): unformatted start date
+            end_date (str): unformatted end date
 
         Returns:
-            Tuple of a begin date and end date in format YYYY-MM-DD
+            formatted_start_date (str): start date in format YYYY-MM-DD
+            formatted_start_date (str): end date in format YYYY-MM-DD
         """
-        begin_date = dates['begin']
-        end_date = None
-        if dates['date_type'] == 'single':
-            end_date = begin_date
-        else:
-            end_date = dates['end']
-        parsed_begin = parser.isoparse(begin_date)
+        parsed_start = parser.isoparse(start_date)
         parsed_end = parser.isoparse(end_date)
-        formatted_begin = parsed_begin.strftime('%Y-%m-%d')
+        formatted_start = parsed_start.strftime('%Y-%m-%d')
         if len(end_date) == 4:
             formatted_end = (
                 parsed_end + relativedelta.relativedelta(
@@ -206,7 +222,7 @@ class Packager(object):
                     day=31)).strftime('%Y-%m-%d')
         else:
             formatted_end = end_date
-        return formatted_begin, formatted_end
+        return formatted_start, formatted_end
 
     def create_bag(self, bag_dir, rights_ids):
         """Creates a BagIt bag from a directory.
@@ -216,12 +232,14 @@ class Packager(object):
             rights_ids (list): List of rights IDs to apply to the package.
         """
         obj_uri = self.uri_from_refid(bag_dir.name)
-        start_date, end_date = self.format_aspace_date(
-            find_closest_value(obj_uri, 'dates', self.as_client)[0])
+        start_date, end_date = self.get_date_range(
+            find_closest_value(obj_uri, 'dates', self.as_client))
+        formatted_start_date, formatted_end_date = self.format_aspace_date(
+            start_date, end_date)
         metadata = {
             'ArchivesSpace-URI': obj_uri,
-            'Start-Date': start_date,
-            'End-Date': end_date,
+            'Start-Date': formatted_start_date,
+            'End-Date': formatted_end_date,
             'Origin': 'av_digitization',
             'Rights-ID': rights_ids,
             'BagIt-Profile-Identifier': 'zorya_bagit_profile.json'}

@@ -203,14 +203,16 @@ def test_deliver_derivatives():
     assert not Path(tmp_path, "poster.png").is_file()
 
 
+@patch('src.package.Packager.get_date_range')
 @patch('src.package.Packager.format_aspace_date')
 @patch('src.package.Packager.uri_from_refid')
-def test_create_bag(mock_uri, mock_dates, audio_packager):
+def test_create_bag(mock_uri, mock_dates, mock_range, audio_packager):
     """Asserts bag is created as expected."""
     as_uri = "/repositories/2/archival_objects/1234"
     as_dates = ('1999-01-01', '2000-12-31')
     mock_uri.return_value = as_uri
     mock_dates.return_value = as_dates
+    mock_range.return_value = as_dates
 
     fixture_path = Path('tests', 'fixtures', audio_packager.refid)
     tmp_path = Path(audio_packager.tmp_dir, audio_packager.refid)
@@ -252,18 +254,32 @@ def test_uri_from_refid(mock_get, audio_packager):
                 audio_packager.uri_from_refid(refid)
 
 
-def test_format_aspace_date(audio_packager):
-    """Asserts dates are formatted as expected."""
+def test_get_date_range(audio_packager):
+    """Asserts date ranges are parsed as expected."""
     for fixture_path, expected in [
-            ('date_year.json', ('1950-01-01', '1969-12-31')),
-            ('date_month.json', ('1950-03-01', '1969-04-30')),
-            ('date_day.json', ('1950-02-03', '1969-04-05')),
-            ('date_single.json', ('1950-01-01', '1950-12-31'))]:
-        with open(Path('tests', 'fixtures', fixture_path), 'r') as df:
+            ('single.json', ('1950', '1950')),
+            ('single_range.json', ('1950', '1969')),
+            ('multiple_range.json', ('1950', '1989')),
+            ('multiple_mixed.json', ('1950', '1969')),
+            ('multiple_mixed_after_end.json', ('1950', '1980')),
+            ('multiple_mixed_before_start.json', ('1940', '1969'))]:
+        with open(Path('tests', 'fixtures', 'get_date_range', fixture_path), 'r') as df:
             date_data = json.load(df)
-            returned = audio_packager.format_aspace_date(date_data)
+            returned = audio_packager.get_date_range(date_data)
             assert returned[0] == expected[0]
             assert returned[1] == expected[1]
+
+
+def test_format_aspace_date(audio_packager):
+    """Asserts dates are formatted as expected."""
+    for input, expected in [
+            (['1950', '1969'], ('1950-01-01', '1969-12-31')),
+            (['1950-03', '1969-04'], ('1950-03-01', '1969-04-30')),
+            (['1950-02-03', '1969-04-05'], ('1950-02-03', '1969-04-05')),
+            (['1950', '1950'], ('1950-01-01', '1950-12-31'))]:
+        returned = audio_packager.format_aspace_date(*input)
+        assert returned[0] == expected[0]
+        assert returned[1] == expected[1]
 
 
 def test_compress_bag(audio_packager):
