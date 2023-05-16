@@ -13,7 +13,7 @@ from dateutil import parser, relativedelta
 
 logging.basicConfig(
     level=int(os.environ.get('LOGGING_LEVEL', logging.INFO)),
-    format='%(filename)s::%(funcname)s::%(lineno)s %(message)s')
+    format='%(filename)s::%(funcName)s::%(lineno)s %(message)s')
 logging.getLogger("bagit").setLevel(logging.ERROR)
 
 
