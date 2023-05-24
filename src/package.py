@@ -2,7 +2,7 @@ import logging
 import os
 import tarfile
 from pathlib import Path
-from shutil import rmtree
+from shutil import copytree, rmtree
 
 import bagit
 import boto3
@@ -19,13 +19,13 @@ logging.getLogger("bagit").setLevel(logging.ERROR)
 
 class Packager(object):
 
-    def __init__(self, refid, rights_ids, tmp_dir, source_bucket, destination_bucket,
+    def __init__(self, refid, rights_ids, tmp_dir, source_dir, destination_bucket,
                  destination_bucket_video_mezzanine, destination_bucket_video_access,
                  destination_bucket_audio_access, destination_bucket_poster, sns_topic):
         self.refid = refid
         self.rights_ids = [r.strip() for r in rights_ids.split(',')]
         self.tmp_dir = tmp_dir
-        self.source_bucket = source_bucket
+        self.source_dir = source_dir
         self.destination_bucket = destination_bucket
         self.destination_bucket_video_mezzanine = destination_bucket_video_mezzanine
         self.destination_bucket_video_access = destination_bucket_video_access
@@ -61,8 +61,8 @@ class Packager(object):
             f'Packaging started for package {self.refid}.')
         try:
             bag_dir = Path(self.tmp_dir, self.refid)
-            downloaded = self.download_files(bag_dir)
-            self.format = self.parse_format(downloaded)
+            self.move_to_tmp(bag_dir)
+            self.format = self.parse_format(list(bag_dir.glob("*")))
             self.create_poster(bag_dir)
             self.deliver_derivatives()
             self.create_bag(bag_dir, self.rights_ids)
@@ -77,27 +77,14 @@ class Packager(object):
             self.cleanup_failed_job(bag_dir)
             self.deliver_failure_notification(e)
 
-    def download_files(self, bag_dir):
-        """Downloads files from S3 to local storage.
+    def move_to_tmp(self, dest_dir):
+        """Moves files from source directory into temporary directory
 
-        Args:
-            bag_dir (pathlib.Path): directory containing local files.
+        Returns:
+            dest_dir (Pathlib.Path instances): destination directory of files.
         """
-        if not bag_dir.is_dir():
-            bag_dir.mkdir()
-        to_download = self.s3.list_objects_v2(
-            Bucket=self.source_bucket,
-            Prefix=self.refid)['Contents']
-        for obj in to_download:
-            filename = obj['Key']
-            self.s3.download_file(
-                self.source_bucket,
-                filename,
-                f"{self.tmp_dir}/{filename}",
-                Config=self.transfer_config)
-        file_list = list(bag_dir.glob("*"))
-        logging.debug(file_list)
-        return file_list
+        source_dir = Path(self.source_dir, self.refid)
+        copytree(source_dir, dest_dir)
 
     def parse_format(self, file_list):
         """Parses format information from file list.
@@ -278,14 +265,10 @@ class Packager(object):
         package_path.unlink()
         logging.debug('Packaged delivered.')
 
-    def cleanup_successful_job(self):
+    def cleanup_successful_job(self, bag_path):
         """Remove artifacts from successful job."""
-        to_delete = self.s3.list_objects_v2(
-            Bucket=self.source_bucket,
-            Prefix=self.refid)['Contents']
-        self.s3.delete_objects(
-            Bucket=self.source_bucket,
-            Delete={'Objects': [{'Key': obj['Key']} for obj in to_delete]})
+        rmtree(bag_path)
+        rmtree(Path(self.source_dir, self.refid))
         logging.debug('Cleanup from successful job completed.')
 
     def cleanup_failed_job(self, bag_dir):
@@ -362,7 +345,7 @@ if __name__ == '__main__':
     refid = os.environ.get('REFID')
     rights_ids = os.environ.get('RIGHTS_IDS')
     tmp_dir = os.environ.get('TMP_DIR')
-    source_bucket = os.environ.get('AWS_SOURCE_BUCKET')
+    source_dir = os.environ.get('SOURCE_DIR')
     destination_bucket = os.environ.get('AWS_DESTINATION_BUCKET')
     destination_bucket_video_mezzanine = os.environ.get(
         'AWS_DESTINATION_BUCKET_VIDEO_MEZZANINE')
@@ -376,7 +359,7 @@ if __name__ == '__main__':
         refid,
         rights_ids,
         tmp_dir,
-        source_bucket,
+        source_dir,
         destination_bucket,
         destination_bucket_video_mezzanine,
         destination_bucket_video_access,

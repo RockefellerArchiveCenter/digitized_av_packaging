@@ -34,9 +34,11 @@ def video_packager():
 @pytest.fixture(autouse=True)
 def setup_and_teardown():
     """Fixture to create and tear down tmp dir before and after a test is run"""
-    tmp_dir = Path(AUDIO_ARGS[2])
-    if not tmp_dir.is_dir():
-        tmp_dir.mkdir()
+    dir_list = [AUDIO_ARGS[2], AUDIO_ARGS[3]]
+    for dir in dir_list:
+        tmp_dir = Path(dir)
+        if not tmp_dir.is_dir():
+            tmp_dir.mkdir()
 
     mock_response = MagicMock()
     mock_response.return_value.text = "v3.0.2"
@@ -45,10 +47,11 @@ def setup_and_teardown():
 
         yield  # this is where the testing happens
 
-    rmtree(str(tmp_dir))
+    for dir in dir_list:
+        rmtree(dir)
 
 
-@patch('src.package.Packager.download_files')
+@patch('src.package.Packager.move_to_tmp')
 @patch('src.package.Packager.parse_format')
 @patch('src.package.Packager.create_poster')
 @patch('src.package.Packager.deliver_derivatives')
@@ -58,14 +61,13 @@ def setup_and_teardown():
 @patch('src.package.Packager.cleanup_successful_job')
 @patch('src.package.Packager.deliver_success_notification')
 def test_run(mock_notification, mock_cleanup, mock_deliver, mock_compress, mock_create,
-             mock_deliver_derivatives, mock_poster, mock_parse, mock_download):
+             mock_deliver_derivatives, mock_poster, mock_parse, mock_move):
     """Asserts run method calls other methods."""
     packager = Packager(*AUDIO_ARGS)
     bag_dir = Path(packager.tmp_dir, packager.refid)
     compressed_name = "foo.tar.gz"
     mock_compress.return_value = compressed_name
     file_list = []
-    mock_download.return_value = file_list
     packager.run()
     mock_cleanup.assert_called_once_with()
     mock_notification.assert_called_once_with()
@@ -75,16 +77,16 @@ def test_run(mock_notification, mock_cleanup, mock_deliver, mock_compress, mock_
     mock_deliver_derivatives.assert_called_once_with()
     mock_poster.assert_called_once_with(bag_dir)
     mock_parse.assert_called_once_with(file_list)
-    mock_download.assert_called_once_with(bag_dir)
+    mock_move.assert_called_once_with(bag_dir)
 
 
-@patch('src.package.Packager.download_files')
+@patch('src.package.Packager.move_to_tmp')
 @patch('src.package.Packager.cleanup_failed_job')
 @patch('src.package.Packager.deliver_failure_notification')
-def test_run_with_exception(mock_notification, mock_cleanup, mock_download):
+def test_run_with_exception(mock_notification, mock_cleanup, mock_move):
     packager = Packager(*AUDIO_ARGS)
-    exception = Exception("Error downloading bag.")
-    mock_download.side_effect = exception
+    exception = Exception("Error moving.")
+    mock_move.side_effect = exception
     packager.run()
     mock_cleanup.assert_called_once_with(
         Path(packager.tmp_dir, packager.refid))
@@ -110,29 +112,6 @@ def test_parse_format():
         Path(f'{packager.refid}_a.jpg')]
     with pytest.raises(Exception):
         packager.parse_format(unrecognized_files)
-
-
-@mock_s3
-def test_download_files():
-    """Asserts files are downloaded correctly."""
-    packager = Packager(*AUDIO_ARGS)
-    bucket_name = packager.source_bucket
-    s3 = boto3.client('s3', region_name='us-east-1')
-    s3.create_bucket(Bucket=bucket_name)
-    expected_len = len(list(Path().glob(f"tests/fixtures/{packager.refid}/*")))
-    for obj_path in Path().glob(f"tests/fixtures/{packager.refid}/*"):
-        s3.put_object(
-            Bucket=bucket_name,
-            Key=f"{packager.refid}/{obj_path.name}",
-            Body='')
-
-    packager.download_files(Path(packager.tmp_dir, packager.refid))
-    tmp_files = len(list(Path(packager.tmp_dir, packager.refid).glob('*')))
-    assert tmp_files == expected_len
-    for p in [
-            Path(packager.tmp_dir, packager.refid, f"{packager.refid}_ma.wav"),
-            Path(packager.tmp_dir, packager.refid, f"{packager.refid}_a.mp3")]:
-        assert p.is_file()
 
 
 def test_create_poster(video_packager):
@@ -312,27 +291,24 @@ def test_deliver_package():
     assert not tmp_path.exists()
 
 
-@mock_s3
-def test_cleanup_successful_job():
+def test_cleanup_successful_job(audio_packager):
     """Asserts successful job is cleaned up as expected."""
-    packager = Packager(*AUDIO_ARGS)
-    s3 = boto3.client('s3', region_name='us-east-1')
-    s3.create_bucket(Bucket=packager.source_bucket)
-    s3.put_object(
-        Bucket=packager.source_bucket,
-        Key=f"{packager.refid}/foo",
-        Body='')
-    s3.put_object(
-        Bucket=packager.source_bucket,
-        Key=f"{packager.refid}/bar",
-        Body='')
+    fixture_path = Path(
+        'tests',
+        'fixtures',
+        'b90862f3baceaae3b7418c78f9d50d52')
+    tmp_path = Path(audio_packager.tmp_dir, audio_packager.refid)
+    src_path = Path(audio_packager.source_dir, audio_packager.refid)
+    copytree(fixture_path, tmp_path)
+    copytree(fixture_path, src_path)
 
-    packager.cleanup_successful_job()
+    audio_packager.cleanup_successful_job(tmp_path)
 
-    deleted = s3.list_objects_v2(
-        Bucket=packager.source_bucket,
-        Prefix=packager.refid)['KeyCount']
-    assert deleted == 0
+    source_objects = list(src_path.glob('*'))
+    temp_objects = list(tmp_path.glob('*'))
+
+    assert len(source_objects) == 0
+    assert len(temp_objects) == 0
 
 
 def test_cleanup_failed_job(audio_packager):

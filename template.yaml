@@ -12,7 +12,11 @@ Parameters:
   StoragePath:
     Type: String
     Description: Path to use in temporary storage.
-    Default: '/packager'
+    Default: '/packaging'
+  SourcePath:
+    Type: String
+    Description: Source path in temporary storage
+    Default: '/qc'
   DestinationBucketName:
     Type: String
     Description: Name of bucket to deliver files for Zorya processing.
@@ -29,6 +33,8 @@ Resources:
           Environment:
             - Name: TMP_DIR
               Value: !Ref StoragePath
+            - Name: SOURCE_DIR
+              Value: !Ref SourcePath
             - Name: AWS_REGION_NAME
               Value: !Ref AWS::Region
             - Name: AWS_DESTINATION_BUCKET
