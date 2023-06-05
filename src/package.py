@@ -19,7 +19,8 @@ logging.getLogger("bagit").setLevel(logging.ERROR)
 
 class Packager(object):
 
-    def __init__(self, refid, rights_ids, tmp_dir, source_dir, destination_bucket,
+    def __init__(self, access_key_id, access_key, region, as_baseurl, as_repo, as_username,
+                 as_password, refid, rights_ids, tmp_dir, source_dir, destination_bucket,
                  destination_bucket_video_mezzanine, destination_bucket_video_access,
                  destination_bucket_audio_access, destination_bucket_poster, sns_topic):
         self.refid = refid
@@ -34,20 +35,20 @@ class Packager(object):
         self.sns_topic = sns_topic
         self.sns = boto3.client(
             'sns',
-            region_name=os.environ.get('AWS_REGION_NAME', 'us-east-1'),
-            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'))
+            region_name=region,
+            aws_access_key_id=access_key_id,
+            aws_secret_access_key=access_key)
         self.s3 = boto3.client(
             's3',
-            region_name=os.environ.get('AWS_REGION_NAME', 'us-east-1'),
-            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'))
+            region_name=region,
+            aws_access_key_id=access_key_id,
+            aws_secret_access_key=access_key)
         self.as_client = ASpace(
-            baseurl=os.environ.get('AS_BASEURL', 'http://localhos:4567'),
-            username=os.environ.get('AS_USERNAME', 'admin'),
-            password=os.environ.get('AS_PASSWORD', 'admin')
+            baseurl=as_baseurl,
+            username=as_username,
+            password=as_password
         ).client
-        self.as_repo = os.environ.get('AS_REPO', '2')
+        self.as_repo = as_repo
         self.transfer_config = boto3.s3.transfer.TransferConfig(
             multipart_threshold=1024 * 25,
             max_concurrency=10,
@@ -341,9 +342,41 @@ class Packager(object):
         logging.debug('Failure notification delivered.')
 
 
+def get_config(ssm_parameter_path, region_name):
+    """Fetch config values from Parameter Store.
+
+    Args:
+        ssm_parameter_path (str): Path to parameters
+
+    Returns:
+        configuration (dict): all parameters found at the supplied path.
+            The following keys are expected to be present:
+                - AWS_ACCESS_KEY_ID
+                - AWS_SECRET_ACCESS_KEY
+                - AWS_REGION
+                - TMP_DIR
+                - DESTINATION_DIR
+                - SNS_TOPIC
+    """
+    client = boto3.client('ssm', region_name=region_name)
+    configuration = {}
+    param_details = client.get_parameters_by_path(
+        Path=ssm_parameter_path,
+        Recursive=False,
+        WithDecryption=True)
+
+    for param in param_details.get('Parameters', []):
+        param_path_array = param.get('Name').split("/")
+        section_name = param_path_array[-1]
+        configuration[section_name] = param.get('Value')
+
+    return configuration
+
+
 if __name__ == '__main__':
     refid = os.environ.get('REFID')
     rights_ids = os.environ.get('RIGHTS_IDS')
+    region = os.environ.get('AWS_REGION')
     tmp_dir = os.environ.get('TMP_DIR')
     source_dir = os.environ.get('SOURCE_DIR')
     destination_bucket = os.environ.get('AWS_DESTINATION_BUCKET')
@@ -355,7 +388,25 @@ if __name__ == '__main__':
         'AWS_DESTINATION_BUCKET_AUDIO_ACCESS')
     destination_bucket_poster = os.environ.get('AWS_DESTINATION_BUCKET_POSTER')
     sns_topic = os.environ.get('AWS_SNS_TOPIC')
+
+    ssm_parameter_path = f"/{os.environ.get('ENV')}/{os.environ.get('APP_CONFIG_PATH')}"
+    config = get_config(ssm_parameter_path, region)
+    access_key_id = config.get('AWS_ACCESS_KEY_ID')
+    access_key = config.get('AWS_SECRET_ACCESS_KEY')
+    as_baseurl = config.get('AS_BASEURL')
+    as_repo = config.get('AS_REPO')
+    as_username = config.get('AS_USERNAME')
+    as_password = config.get('AS_PASSWORD')
+
+    sns_topic = config.get('SNS_TOPIC')
     Packager(
+        access_key_id,
+        access_key,
+        region,
+        as_baseurl,
+        as_repo,
+        as_username,
+        as_password,
         refid,
         rights_ids,
         tmp_dir,

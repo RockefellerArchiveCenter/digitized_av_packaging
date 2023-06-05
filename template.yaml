@@ -8,19 +8,18 @@ Parameters:
   ContainerImageName:
     Type: String
     Description: Name of container used in this task.
-    Default: digitized_av_packagin
-  StoragePath:
+    Default: digitized_av_packaging
+  ApplicationEnvironment:
     Type: String
-    Description: Path to use in temporary storage.
-    Default: '/packaging'
-  SourcePath:
+    Description: Environment in which application should be deployed.
+    AllowedValues:
+      - dev
+      - prod
+    Default: dev
+  ApplicationName:
     Type: String
-    Description: Source path in temporary storage
-    Default: '/qc'
-  DestinationBucketName:
-    Type: String
-    Description: Name of bucket to deliver files for Zorya processing.
-    Default: rac-dev-zorya-staging
+    Description: Name of the application to be deployed.
+    Default: digitized-av-validation
 
 Resources:
   PackagingECSTask:
@@ -31,10 +30,10 @@ Resources:
           Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ContainerImageName}:latest"
           Essential: true
           Environment:
-            - Name: TMP_DIR
-              Value: !Ref StoragePath
-            - Name: SOURCE_DIR
-              Value: !Ref SourcePath
+            - Name: ENV
+              Value: !Ref ApplicationEnvironment
+            - Name: APP_CONFIG_PATH
+              Value: !Ref ApplicationName
             - Name: AWS_REGION_NAME
               Value: !Ref AWS::Region
             - Name: AWS_DESTINATION_BUCKET
@@ -47,12 +46,8 @@ Resources:
               Value: !Ref VideoAccessBucket
             - Name: AWS_DESTINATION_BUCKET_VIDEO_MEZZANINE
               Value: !Ref VideoMezzanineBucket
-            - Name: AS_REPO
-              Value: '2'
-            - Name: AS_BASEURL
-              Value: https://as.rockarch.org/api
             - Name: AWS_SNS_TOPIC
-              Value: !ImportValue DigitizedAV-SNSTopicArn            
+              Value: !ImportValue DigitizedAV-SNSTopicArn      
           MountPoints:
             - SourceVolume: efs
               ContainerPath: !Ref StoragePath

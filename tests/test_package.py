@@ -6,15 +6,19 @@ from unittest.mock import DEFAULT, MagicMock, patch
 import bagit
 import boto3
 import pytest
-from moto import mock_s3, mock_sns, mock_sqs
+from moto import mock_s3, mock_sns, mock_sqs, mock_ssm
 from moto.core import DEFAULT_ACCOUNT_ID
 
-from src.package import Packager
+from src.package import Packager, get_config
 
-AUDIO_ARGS = ['b90862f3baceaae3b7418c78f9d50d52', "1,2", "tmp", "source", "destination",
-              "destination_video_mezz", "destination_video_access", "destination_audio_access", "destination_poster", "topic"]
-VIDEO_ARGS = ['20f8da26e268418ead4aa2365f816a08', "1,2", "tmp", "source", "destination",
-              "destination_video_mezz", "destination_video_access", "destination_audio_access", "destination_poster", "topic"]
+AUDIO_ARGS = ['access-key-id', 'access-key', 'us-east-1', 'https://as.rockarch.org/api',
+              '2', 'admin', 'admin', 'b90862f3baceaae3b7418c78f9d50d52', "1,2", "tmp",
+              "source", "destination", "destination_video_mezz", "destination_video_access",
+              "destination_audio_access", "destination_poster", "topic"]
+VIDEO_ARGS = ['access-key-id', 'access-key', 'us-east-1', 'https://as.rockarch.org/api',
+              '2', 'admin', 'admin', '20f8da26e268418ead4aa2365f816a08', "1,2", "tmp",
+              "source", "destination", "destination_video_mezz", "destination_video_access",
+              "destination_audio_access", "destination_poster", "topic"]
 
 
 @pytest.fixture
@@ -34,7 +38,7 @@ def video_packager():
 @pytest.fixture(autouse=True)
 def setup_and_teardown():
     """Fixture to create and tear down tmp dir before and after a test is run"""
-    dir_list = [AUDIO_ARGS[2], AUDIO_ARGS[3]]
+    dir_list = [AUDIO_ARGS[9], AUDIO_ARGS[10]]
     for dir in dir_list:
         tmp_dir = Path(dir)
         if not tmp_dir.is_dir():
@@ -49,6 +53,20 @@ def setup_and_teardown():
 
     for dir in dir_list:
         rmtree(dir)
+
+
+@mock_ssm
+def test_get_config():
+    ssm = boto3.client('ssm', region_name='us-east-1')
+    path = "/dev/digitized-av-packaging"
+    for name, value in [("foo", "bar"), ("baz", "buzz")]:
+        ssm.put_parameter(
+            Name=f"{path}/{name}",
+            Value=value,
+            Type="SecureString",
+        )
+    config = get_config(path, 'us-east-1')
+    assert config == {'foo': 'bar', 'baz': 'buzz'}
 
 
 @patch('src.package.Packager.move_to_tmp')
@@ -207,7 +225,7 @@ def test_create_bag(mock_uri, mock_dates, mock_range, audio_packager):
     assert bag.info['ArchivesSpace-URI'] == as_uri
     assert bag.info['Start-Date'] == as_dates[0]
     assert bag.info['End-Date'] == as_dates[1]
-    assert bag.info['Rights-ID'] == AUDIO_ARGS[1].split(',')
+    assert bag.info['Rights-ID'] == AUDIO_ARGS[8].split(',')
     assert bag.info['BagIt-Profile-Identifier'] == 'zorya_bagit_profile.json'
 
 
