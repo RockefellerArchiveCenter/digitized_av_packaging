@@ -20,6 +20,14 @@ Parameters:
     Type: String
     Description: Name of the application to be deployed.
     Default: digitized-av-validation
+  StoragePath:
+    Type: String
+    Description: Location in EFS mount at which files are stored.
+    Default: '/qc'
+  DestinationBucketName:
+    Type: String
+    Description: Name of S3 bucket to which packaged files should be delivered.
+    Default: 'rac-dev-zorya-staging'
 
 Resources:
   PackagingECSTask:
