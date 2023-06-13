@@ -353,10 +353,10 @@ def get_config(ssm_parameter_path, region_name):
             The following keys are expected to be present:
                 - AWS_ACCESS_KEY_ID
                 - AWS_SECRET_ACCESS_KEY
-                - AWS_REGION
-                - TMP_DIR
-                - DESTINATION_DIR
-                - SNS_TOPIC
+                - AS_BASEURL
+                - AS_REPO
+                - AS_USERNAME
+                - AS_PASSWORD
     """
     client = boto3.client('ssm', region_name=region_name)
     configuration = {}
@@ -397,8 +397,6 @@ if __name__ == '__main__':
     as_repo = config.get('AS_REPO')
     as_username = config.get('AS_USERNAME')
     as_password = config.get('AS_PASSWORD')
-
-    sns_topic = config.get('SNS_TOPIC')
     Packager(
         access_key_id,
         access_key,
