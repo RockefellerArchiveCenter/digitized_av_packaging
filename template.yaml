@@ -28,8 +28,76 @@ Parameters:
     Type: String
     Description: Name of S3 bucket to which packaged files should be delivered.
     Default: 'rac-dev-zorya-staging'
+  AwsAccessKeyId:
+    Type: String
+    Description: AWS Access Key ID for user with permissions to upload to S3.
+  AwsSecretAccessKey:
+    Type: String
+    Description: AWS Secret Access Key for user with permissions to upload to S3.
+  ArchivesSpaceRepo:
+    Type: String
+    Description: ArchivesSpace repository identifier.
+    Default: '2'
+  ArchivesSpaceUsername:
+    Type: String
+    Description: ArchivesSpace username.
+    Default: av-pipeline
+  ArchivesSpacePassword:
+    Type: String
+    Description: ArchivesSpace password.
 
-Resources:
+Resources:  
+  AwsAccessKeyIdParameter:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Description: AWS Access Key ID for user with permissions to upload to S3.
+      Name: !Sub /${ApplicationEnvironment}/${ApplicationName}/AWS_ACCESS_KEY_ID
+      Tags: 
+        Environment: !Ref ApplicationEnvironment
+        Application: !Ref ApplicationName
+      Type: String
+      Value: !Ref AwsAccessKeyId
+  AwsSecretAccessKeyParameter:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Description: AWS Secret Access Key for user with permissions to upload to S3.
+      Name: !Sub /${ApplicationEnvironment}/${ApplicationName}/AWS_SECRET_ACCESS_KEY
+      Tags: 
+        Environment: !Ref ApplicationEnvironment
+        Application: !Ref ApplicationName
+      Type: String
+      Value: !Ref AwsSecretAccessKey
+  ArchivesSpaceRepoParameter:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Description: ArchivesSpace repository identifier.
+      Name: !Sub /${ApplicationEnvironment}/${ApplicationName}/AS_REPO
+      Tags: 
+        Environment: !Ref ApplicationEnvironment
+        Application: !Ref ApplicationName
+      Type: String
+      Value: !Ref ArchivesSpaceRepo
+  ArchivesSpaceUsernameParameter:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Description: ArchivesSpace username.
+      Name: !Sub /${ApplicationEnvironment}/${ApplicationName}/AS_USERNAME
+      Tags: 
+        Environment: !Ref ApplicationEnvironment
+        Application: !Ref ApplicationName
+      Type: String
+      Value: !Ref ArchivesSpaceUsername
+  ArchivesSpacePasswordParameter:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Description: ArchivesSpace password.
+      Name: !Sub /${ApplicationEnvironment}/${ApplicationName}/AS_PASSWORD
+      Tags: 
+        Environment: !Ref ApplicationEnvironment
+        Application: !Ref ApplicationName
+      Type: String
+      Value: !Ref ArchivesSpacePassword
+
   PackagingECSTask:
     Type: AWS::ECS::TaskDefinition
     Properties: 
