@@ -38,6 +38,10 @@ Parameters:
     Type: String
     Description: ArchivesSpace repository identifier.
     Default: '2'
+  ArchivesSpaceBaseUrl:
+    Type: String
+    Description: ArchivesSpace base URL.
+    Default: 'https://as.dev.rockarch.org/api'
   ArchivesSpaceUsername:
     Type: String
     Description: ArchivesSpace username.
@@ -47,26 +51,6 @@ Parameters:
     Description: ArchivesSpace password.
 
 Resources:  
-  AwsAccessKeyIdParameter:
-    Type: AWS::SSM::Parameter
-    Properties: 
-      Description: AWS Access Key ID for user with permissions to upload to S3.
-      Name: !Sub /${ApplicationEnvironment}/${ApplicationName}/AWS_ACCESS_KEY_ID
-      Tags: 
-        Environment: !Ref ApplicationEnvironment
-        Application: !Ref ApplicationName
-      Type: String
-      Value: !Ref AwsAccessKeyId
-  AwsSecretAccessKeyParameter:
-    Type: AWS::SSM::Parameter
-    Properties: 
-      Description: AWS Secret Access Key for user with permissions to upload to S3.
-      Name: !Sub /${ApplicationEnvironment}/${ApplicationName}/AWS_SECRET_ACCESS_KEY
-      Tags: 
-        Environment: !Ref ApplicationEnvironment
-        Application: !Ref ApplicationName
-      Type: String
-      Value: !Ref AwsSecretAccessKey
   ArchivesSpaceRepoParameter:
     Type: AWS::SSM::Parameter
     Properties: 
@@ -77,6 +61,16 @@ Resources:
         Application: !Ref ApplicationName
       Type: String
       Value: !Ref ArchivesSpaceRepo
+  ArchivesSpaceBaseUrlParameter:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Description: ArchivesSpace base URL.
+      Name: !Sub /${ApplicationEnvironment}/${ApplicationName}/AS_BASEURL
+      Tags: 
+        Environment: !Ref ApplicationEnvironment
+        Application: !Ref ApplicationName
+      Type: String
+      Value: !Ref ArchivesSpaceBaseUrl
   ArchivesSpaceUsernameParameter:
     Type: AWS::SSM::Parameter
     Properties: 
@@ -98,6 +92,40 @@ Resources:
       Type: String
       Value: !Ref ArchivesSpacePassword
 
+  DigitizedAvPackagingRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Description: !Sub 'Allows management of S3 assets and creation of SNS messages.'
+      Policies:
+        - PolicyName: DigitizedAvValidationS3ObjectPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - 's3:PutObject'
+                Resource: 
+                  - !Sub '${PosterBucket.Arn}/*'
+                  - !Sub '${AudioAccessBucket.Arn}/*'
+                  - !Sub '${VideoAccessBucket.Arn}/*'
+                  - !Sub '${VideoMezzanineBucket.Arn}/*'
+        - PolicyName: DigitizedAvValidationSNSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: 'sns:Publish'
+                Resource: !ImportValue DigitizedAV-SNSTopicArn
+
   PackagingECSTask:
     Type: AWS::ECS::TaskDefinition
     Properties: 
@@ -112,6 +140,8 @@ Resources:
               Value: !Ref ApplicationName
             - Name: AWS_REGION_NAME
               Value: !Ref AWS::Region
+            - Name: AWS_ROLE_ARN
+              Value: !GetAtt DigitizedAvPackagingRole.Arn
             - Name: AWS_DESTINATION_BUCKET
               Value: !Ref DestinationBucketName
             - Name: AWS_DESTINATION_BUCKET_POSTER
