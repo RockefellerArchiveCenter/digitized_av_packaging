@@ -1,6 +1,7 @@
 import logging
 import os
 import tarfile
+from datetime import datetime
 from pathlib import Path
 from shutil import copytree, rmtree
 
@@ -19,10 +20,10 @@ logging.getLogger("bagit").setLevel(logging.ERROR)
 
 class Packager(object):
 
-    def __init__(self, access_key_id, access_key, region, as_baseurl, as_repo, as_username,
-                 as_password, refid, rights_ids, tmp_dir, source_dir, destination_bucket,
-                 destination_bucket_video_mezzanine, destination_bucket_video_access,
-                 destination_bucket_audio_access, destination_bucket_poster, sns_topic):
+    def __init__(self, region, role_arn, as_baseurl, as_repo, as_username, as_password, refid, rights_ids, tmp_dir, source_dir, destination_bucket,
+                 destination_bucket_video_mezzanine, destination_bucket_video_access, destination_bucket_audio_access, destination_bucket_poster, sns_topic):
+        self.region = region
+        self.role_arn = role_arn
         self.refid = refid
         self.rights_ids = [r.strip() for r in rights_ids.split(',')]
         self.tmp_dir = tmp_dir
@@ -33,27 +34,12 @@ class Packager(object):
         self.destination_bucket_audio_access = destination_bucket_audio_access
         self.destination_bucket_poster = destination_bucket_poster
         self.sns_topic = sns_topic
-        self.sns = boto3.client(
-            'sns',
-            region_name=region,
-            aws_access_key_id=access_key_id,
-            aws_secret_access_key=access_key)
-        self.s3 = boto3.client(
-            's3',
-            region_name=region,
-            aws_access_key_id=access_key_id,
-            aws_secret_access_key=access_key)
         self.as_client = ASpace(
             baseurl=as_baseurl,
             username=as_username,
             password=as_password
         ).client
         self.as_repo = as_repo
-        self.transfer_config = boto3.s3.transfer.TransferConfig(
-            multipart_threshold=1024 * 25,
-            max_concurrency=10,
-            multipart_chunksize=1024 * 25,
-            use_threads=True)
         logging.debug(self.__dict__)
 
     def run(self):
@@ -77,6 +63,23 @@ class Packager(object):
             logging.exception(e)
             self.cleanup_failed_job(bag_dir)
             self.deliver_failure_notification(e)
+
+    def get_client_with_role(self, resource, role_arn):
+        """Gets Boto3 client which authenticates with a specific IAM role."""
+        now = datetime.now()
+        timestamp = now.timestamp()
+        sts = boto3.client('sts', region_name=self.region)
+        role = sts.assume_role(
+            RoleArn=role_arn,
+            RoleSessionName=f'digitized-av-validation-{timestamp}')
+        credentials = role['Credentials']
+        client = boto3.client(
+            resource,
+            region_name=self.region,
+            aws_access_key_id=credentials['AccessKeyId'],
+            aws_secret_access_key=credentials['SecretAccessKey'],
+            aws_session_token=credentials['SessionToken'],)
+        return client
 
     def move_to_tmp(self, dest_dir):
         """Moves files from source directory into temporary directory
@@ -141,16 +144,22 @@ class Packager(object):
 
     def deliver_derivatives(self):
         """Uploads derivatives to S3 buckets and deletes them from temporary storage."""
+        client = self.get_client_with_role('s3', self.role_arn)
+        transfer_config = boto3.s3.transfer.TransferConfig(
+            multipart_threshold=1024 * 25,
+            max_concurrency=10,
+            multipart_chunksize=1024 * 25,
+            use_threads=True)
         to_upload = self.derivative_map()
         for obj_path, bucket, content_type in to_upload:
             logging.debug(
                 f'Uploading {obj_path} to bucket {bucket} with content type {content_type}')
-            self.s3.upload_file(
+            client.upload_file(
                 str(obj_path),
                 bucket,
                 f"{self.refid}{obj_path.suffix}",
                 ExtraArgs={'ContentType': content_type},
-                Config=self.transfer_config)
+                Config=transfer_config)
             obj_path.unlink()
         logging.debug('Derivative files delivered.')
 
@@ -257,12 +266,18 @@ class Packager(object):
         Args:
             package_path (pathlib.Path): path of compressed archive to upload.
         """
-        self.s3.upload_file(
+        client = self.get_client_with_role('s3', self.role_arn)
+        transfer_config = boto3.s3.transfer.TransferConfig(
+            multipart_threshold=1024 * 25,
+            max_concurrency=10,
+            multipart_chunksize=1024 * 25,
+            use_threads=True)
+        client.upload_file(
             package_path,
             self.destination_bucket,
             package_path.name,
             ExtraArgs={'ContentType': 'application/gzip'},
-            Config=self.transfer_config)
+            Config=transfer_config)
         package_path.unlink()
         logging.debug('Packaged delivered.')
 
@@ -285,7 +300,8 @@ class Packager(object):
 
     def deliver_success_notification(self):
         """Sends notifications after successful run."""
-        self.sns.publish(
+        client = self.get_client_with_role('sns', self.role_arn)
+        client.publish(
             TopicArn=self.sns_topic,
             Message=f'{self.format} package {self.refid} successfully packaged',
             MessageAttributes={
@@ -314,7 +330,8 @@ class Packager(object):
         Args:
             exception (Exception): the exception that was thrown.
         """
-        self.sns.publish(
+        client = self.get_client_with_role('sns', self.role_arn)
+        client.publish(
             TopicArn=self.sns_topic,
             Message=f'{getattr(self, "format", "unknown format")} package {self.refid} failed packaging',
             MessageAttributes={
@@ -377,6 +394,7 @@ if __name__ == '__main__':
     refid = os.environ.get('REFID')
     rights_ids = os.environ.get('RIGHTS_IDS')
     region = os.environ.get('AWS_REGION')
+    role_arn = os.environ.get('AWS_ROLE_ARN')
     tmp_dir = os.environ.get('TMP_DIR')
     source_dir = os.environ.get('SOURCE_DIR')
     destination_bucket = os.environ.get('AWS_DESTINATION_BUCKET')
@@ -391,16 +409,13 @@ if __name__ == '__main__':
 
     ssm_parameter_path = f"/{os.environ.get('ENV')}/{os.environ.get('APP_CONFIG_PATH')}"
     config = get_config(ssm_parameter_path, region)
-    access_key_id = config.get('AWS_ACCESS_KEY_ID')
-    access_key = config.get('AWS_SECRET_ACCESS_KEY')
     as_baseurl = config.get('AS_BASEURL')
     as_repo = config.get('AS_REPO')
     as_username = config.get('AS_USERNAME')
     as_password = config.get('AS_PASSWORD')
     Packager(
-        access_key_id,
-        access_key,
         region,
+        role_arn,
         as_baseurl,
         as_repo,
         as_username,

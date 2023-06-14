@@ -6,16 +6,16 @@ from unittest.mock import DEFAULT, MagicMock, patch
 import bagit
 import boto3
 import pytest
-from moto import mock_s3, mock_sns, mock_sqs, mock_ssm
+from moto import mock_s3, mock_sns, mock_sqs, mock_ssm, mock_sts
 from moto.core import DEFAULT_ACCOUNT_ID
 
 from src.package import Packager, get_config
 
-AUDIO_ARGS = ['access-key-id', 'access-key', 'us-east-1', 'https://as.rockarch.org/api',
+AUDIO_ARGS = ['us-east-1', 'digitized-av-packaging-role-arn', 'https://as.dev.rockarch.org/api',
               '2', 'admin', 'admin', 'b90862f3baceaae3b7418c78f9d50d52', "1,2", "tmp",
               "source", "destination", "destination_video_mezz", "destination_video_access",
               "destination_audio_access", "destination_poster", "topic"]
-VIDEO_ARGS = ['access-key-id', 'access-key', 'us-east-1', 'https://as.rockarch.org/api',
+VIDEO_ARGS = ['us-east-1', 'digitized-av-packaging-role-arn', 'https://as.dev.rockarch.org/api',
               '2', 'admin', 'admin', '20f8da26e268418ead4aa2365f816a08', "1,2", "tmp",
               "source", "destination", "destination_video_mezz", "destination_video_access",
               "destination_audio_access", "destination_poster", "topic"]
@@ -38,7 +38,7 @@ def video_packager():
 @pytest.fixture(autouse=True)
 def setup_and_teardown():
     """Fixture to create and tear down tmp dir before and after a test is run"""
-    dir_list = [AUDIO_ARGS[9], AUDIO_ARGS[10]]
+    dir_list = [AUDIO_ARGS[8], AUDIO_ARGS[9]]
     for dir in dir_list:
         tmp_dir = Path(dir)
         if not tmp_dir.is_dir():
@@ -168,6 +168,7 @@ def test_derivative_map_video(video_packager):
 
 
 @mock_s3
+@mock_sts
 def test_deliver_derivatives():
     """Assert derivatives are delivered to correct buckets and deleted locally."""
     packager = Packager(*VIDEO_ARGS)
@@ -225,7 +226,7 @@ def test_create_bag(mock_uri, mock_dates, mock_range, audio_packager):
     assert bag.info['ArchivesSpace-URI'] == as_uri
     assert bag.info['Start-Date'] == as_dates[0]
     assert bag.info['End-Date'] == as_dates[1]
-    assert bag.info['Rights-ID'] == AUDIO_ARGS[8].split(',')
+    assert bag.info['Rights-ID'] == AUDIO_ARGS[7].split(',')
     assert bag.info['BagIt-Profile-Identifier'] == 'zorya_bagit_profile.json'
 
 
@@ -292,6 +293,7 @@ def test_compress_bag(audio_packager):
 
 
 @mock_s3
+@mock_sts
 def test_deliver_package():
     """Asserts compressed package is delivered and local copy is removed."""
     packager = Packager(*AUDIO_ARGS)
@@ -351,6 +353,7 @@ def test_cleanup_failed_job(audio_packager):
 
 @mock_sns
 @mock_sqs
+@mock_sts
 def test_deliver_success_notification():
     """Assert success notifications are delivered as expected."""
     packager = Packager(*AUDIO_ARGS)
@@ -379,6 +382,7 @@ def test_deliver_success_notification():
 
 @mock_sns
 @mock_sqs
+@mock_sts
 def test_deliver_failure_notification():
     """Asserts failure notifications are delivered as expected."""
     packager = Packager(*AUDIO_ARGS)
