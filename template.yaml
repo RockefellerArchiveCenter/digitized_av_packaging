@@ -28,12 +28,6 @@ Parameters:
     Type: String
     Description: Name of S3 bucket to which packaged files should be delivered.
     Default: 'rac-dev-zorya-staging'
-  AwsAccessKeyId:
-    Type: String
-    Description: AWS Access Key ID for user with permissions to upload to S3.
-  AwsSecretAccessKey:
-    Type: String
-    Description: AWS Secret Access Key for user with permissions to upload to S3.
   ArchivesSpaceRepo:
     Type: String
     Description: ArchivesSpace repository identifier.
