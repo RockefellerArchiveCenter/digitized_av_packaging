@@ -8,38 +8,36 @@ Parameters:
   ContainerImageName:
     Type: String
     Description: Name of container used in this task.
-    Default: digitized_av_packaging
   ApplicationEnvironment:
     Type: String
     Description: Environment in which application should be deployed.
     AllowedValues:
       - dev
       - prod
-    Default: dev
   ApplicationName:
     Type: String
     Description: Name of the application to be deployed.
-    Default: digitized-av-validation
+  EfsId:
+    Type: String
+    Description: Identifier for temporary storage EFS.
+  EfsAccessPointId:
+    Type: String
+    Description: Identifier for temporary storage EFS access point.
   StoragePath:
     Type: String
     Description: Location in EFS mount at which files are stored.
-    Default: '/qc'
   DestinationBucketName:
     Type: String
     Description: Name of S3 bucket to which packaged files should be delivered.
-    Default: 'rac-dev-zorya-staging'
   ArchivesSpaceRepo:
     Type: String
     Description: ArchivesSpace repository identifier.
-    Default: '2'
   ArchivesSpaceBaseUrl:
     Type: String
     Description: ArchivesSpace base URL.
-    Default: 'https://as.dev.rockarch.org/api'
   ArchivesSpaceUsername:
     Type: String
     Description: ArchivesSpace username.
-    Default: av-pipeline
   ArchivesSpacePassword:
     Type: String
     Description: ArchivesSpace password.
@@ -170,11 +168,11 @@ Resources:
       Volumes: 
         - Name: efs
           EFSVolumeConfiguration:
-            FilesystemId: !ImportValue DigitizedAV-EFS
+            FilesystemId: !Ref EfsId
             RootDirectory: /
             TransitEncryption: ENABLED
             AuthorizationConfig:
-              AccessPointId: !ImportValue DigitizedAV-EFS-PackagerAccessPoint
+              AccessPointId: !Ref EfsAccessPointId
               IAM: DISABLED
   
   PosterBucket:
