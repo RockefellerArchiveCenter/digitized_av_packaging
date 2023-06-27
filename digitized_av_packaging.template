@@ -121,6 +121,8 @@ Resources:
   PackagingECSTask:
     Type: AWS::ECS::TaskDefinition
     Properties: 
+      Cpu: 1024
+      Memory: 3072
       ContainerDefinitions: 
         - Name: !Ref ContainerImageName
           Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ContainerImageName}:latest"
@@ -178,8 +180,7 @@ Resources:
   PosterBucket:
     Type: AWS::S3::Bucket
     Properties:
-      AccessControl: String
-      BucketName: rac-av-storage-video-poster
+      BucketName: !Sub rac-${ApplicationEnvironment}-av-storage-video-poster
       PublicAccessBlockConfiguration: 
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -189,8 +190,7 @@ Resources:
   AudioAccessBucket:
     Type: AWS::S3::Bucket
     Properties:
-      AccessControl: String
-      BucketName: rac-av-storage-audio-access
+      BucketName: !Sub rac-${ApplicationEnvironment}-av-storage-audio-access
       PublicAccessBlockConfiguration: 
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -200,8 +200,7 @@ Resources:
   VideoAccessBucket:
     Type: AWS::S3::Bucket
     Properties:
-      AccessControl: String
-      BucketName: rac-av-storage-video-access
+      BucketName: !Sub rac-${ApplicationEnvironment}-av-storage-video-access
       PublicAccessBlockConfiguration: 
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -211,8 +210,7 @@ Resources:
   VideoMezzanineBucket:
     Type: AWS::S3::Bucket
     Properties:
-      AccessControl: String
-      BucketName: rac-av-storage-video-mezzanine
+      BucketName: !Sub rac-${ApplicationEnvironment}-av-storage-video-mezzanine
       PublicAccessBlockConfiguration: 
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -222,7 +220,7 @@ Resources:
 Outputs:
   PackagingECSTask:
     Description: Packaging ECS Task Definition ARN
-    Value: !GetAtt PackagingECSTask.Arn
+    Value: !Ref PackagingECSTask
   PosterBucket:
     Description: Video poster file bucket ARN
     Value: !GetAtt PosterBucket.Arn
