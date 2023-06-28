@@ -25,14 +25,14 @@ deploy:
     bucket: rac-dev-cloudfront-apps
     access_key_id: $AWS_ACCESS_KEY_ID
     secret_access_key: $AWS_SECRET_ACCESS_KEY
-    glob: digitized_av_notifications.template
+    glob: digitized_av_packaging.template
     on:
       branch: development
   - provider: s3
     bucket: rac-prod-cloudfront-apps
     access_key_id: $AWS_ACCESS_KEY_ID
     secret_access_key: $AWS_SECRET_ACCESS_KEY
-    glob: digitized_av_notifications.template
+    glob: digitized_av_packaging.template
     on:
       branch: base
 
