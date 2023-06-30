@@ -27,14 +27,14 @@ deploy:
     on:
       branch: base
   - provider: s3
-    bucket: rac-dev-cloudfront-apps
+    bucket: rac-dev-cloudformation-apps
     access_key_id: $AWS_ACCESS_KEY_ID
     secret_access_key: $AWS_SECRET_ACCESS_KEY
     glob: ${APP_NAME}.template
     on:
       branch: development
   - provider: s3
-    bucket: rac-prod-cloudfront-apps
+    bucket: rac-prod-cloudformation-apps
     access_key_id: $AWS_ACCESS_KEY_ID
     secret_access_key: $AWS_SECRET_ACCESS_KEY
     glob: ${APP_NAME}.template
