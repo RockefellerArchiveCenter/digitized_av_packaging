@@ -30,14 +30,16 @@ deploy:
     bucket: rac-dev-cloudformation-apps
     access_key_id: $AWS_ACCESS_KEY_ID
     secret_access_key: $AWS_SECRET_ACCESS_KEY
-    glob: ${APP_NAME}.template
+    glob: "${APP_NAME}.template"
+    edge: true
     on:
       branch: development
   - provider: s3
     bucket: rac-prod-cloudformation-apps
     access_key_id: $AWS_ACCESS_KEY_ID
     secret_access_key: $AWS_SECRET_ACCESS_KEY
-    glob: ${APP_NAME}.template
+    glob: "${APP_NAME}.template"
+    edge: true
     on:
       branch: base
 
