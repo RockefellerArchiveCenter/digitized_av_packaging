@@ -25,7 +25,9 @@ deploy:
     on:
       branch: development
   - provider: script
-    script: bash deploy_scripts/containers/add_tag_to_image.sh $APP_NAME dev prod
+    script: >-
+      bash deploy_scripts/containers/add_tag_to_image.sh $APP_NAME dev prod &&
+      bash deploy_scripts/upload_file_to_s3.sh $APP_NAME rac-prod-cloudformation-apps
     on:
       branch: base
 
