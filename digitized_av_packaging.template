@@ -85,6 +85,50 @@ Resources:
       Type: String
       Value: !Ref ArchivesSpacePassword
 
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: CreateLogGroupPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - 'logs:CreateLogGroup'
+                Resource: 
+                  - '*'
+
+  DigitizedAvPackagingUser:
+    Type: AWS::IAM::User
+    Properties:
+      Policies:
+      - PolicyName: DigitizedAvPackagingSSMPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: 
+                - 'ssm:GetParametersByPath'
+              Resource:
+                - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ApplicationEnvironment}/${ApplicationName}
+
+  DigitizedAvPackagingUserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties: 
+      UserName: !Ref DigitizedAvPackagingUser
+
   DigitizedAvPackagingRole:
     Type: AWS::IAM::Role
     Properties: 
@@ -93,13 +137,13 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service:
-                - ecs.amazonaws.com
+              AWS:
+                - !GetAtt DigitizedAvPackagingUser.Arn
             Action:
               - 'sts:AssumeRole'
       Description: !Sub 'Allows management of S3 assets and creation of SNS messages.'
       Policies:
-        - PolicyName: DigitizedAvValidationS3ObjectPolicy
+        - PolicyName: DigitizedAvPackagingS3ObjectPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -111,7 +155,7 @@ Resources:
                   - !Sub '${AudioAccessBucket.Arn}/*'
                   - !Sub '${VideoAccessBucket.Arn}/*'
                   - !Sub '${VideoMezzanineBucket.Arn}/*'
-        - PolicyName: DigitizedAvValidationSNSPolicy
+        - PolicyName: DigitizedAvPackagingSNSPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -133,6 +177,10 @@ Resources:
               Value: !Ref ApplicationEnvironment
             - Name: APP_CONFIG_PATH
               Value: !Ref ApplicationName
+            - Name: AWS_ACCESS_KEY_ID
+              Value: !Ref DigitizedAvPackagingUserAccessKey
+            - Name: AWS_SECRET_ACCESS_KEY
+              Value: !GetAtt DigitizedAvPackagingUserAccessKey.SecretAccessKey
             - Name: AWS_REGION_NAME
               Value: !Ref AWS::Region
             - Name: AWS_ROLE_ARN
@@ -158,9 +206,9 @@ Resources:
             Options:
               "awslogs-create-group": "true"
               "awslogs-group": !Sub "/ecs/${ApplicationName}"
-              "awslogs-region": "us-east-1"
+              "awslogs-region": !Ref AWS::Region
               "awslogs-stream-prefix": "ecs"
-      ExecutionRoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/ecsTaskExecutionRole
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
       Family: !Ref ApplicationName
       NetworkMode: awsvpc
       RequiresCompatibilities:
