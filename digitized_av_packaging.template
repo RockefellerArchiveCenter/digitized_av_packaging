@@ -112,17 +112,6 @@ Resources:
 
   DigitizedAvPackagingUser:
     Type: AWS::IAM::User
-    Properties:
-      Policies:
-      - PolicyName: DigitizedAvPackagingSSMPolicy
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action: 
-                - 'ssm:GetParametersByPath'
-              Resource:
-                - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ApplicationEnvironment}/${ApplicationName}
 
   DigitizedAvPackagingUserAccessKey:
     Type: AWS::IAM::AccessKey
@@ -162,6 +151,15 @@ Resources:
               - Effect: Allow
                 Action: 'sns:Publish'
                 Resource: !ImportValue DigitizedAV-SNSTopicArn
+        - PolicyName: DigitizedAvPackagingSSMPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - 'ssm:GetParametersByPath'
+                Resource:
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ApplicationEnvironment}/${ApplicationName}
 
   PackagingECSTask:
     Type: AWS::ECS::TaskDefinition
