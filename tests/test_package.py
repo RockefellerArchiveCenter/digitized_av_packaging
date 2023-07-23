@@ -6,17 +6,18 @@ from unittest.mock import DEFAULT, MagicMock, patch
 import bagit
 import boto3
 import pytest
+from asnake.aspace import ASpace
 from moto import mock_s3, mock_sns, mock_sqs, mock_ssm, mock_sts
 from moto.core import DEFAULT_ACCOUNT_ID
 
-from src.package import Packager, get_config
+from src.package import Packager
 
-AUDIO_ARGS = ['us-east-1', 'digitized-av-packaging-role-arn', 'https://as.dev.rockarch.org/api',
-              '2', 'admin', 'admin', 'b90862f3baceaae3b7418c78f9d50d52', "1,2", "tmp",
+AUDIO_ARGS = ['us-east-1', 'digitized-av-packaging-role-arn', '/dev/digitized_av_packaging',
+              'b90862f3baceaae3b7418c78f9d50d52', "1,2", "tmp",
               "source", "destination", "destination_video_mezz", "destination_video_access",
               "destination_audio_access", "destination_poster", "topic"]
-VIDEO_ARGS = ['us-east-1', 'digitized-av-packaging-role-arn', 'https://as.dev.rockarch.org/api',
-              '2', 'admin', 'admin', '20f8da26e268418ead4aa2365f816a08', "1,2", "tmp",
+VIDEO_ARGS = ['us-east-1', 'digitized-av-packaging-role-arn', '/dev/digitized_av_packaging',
+              '20f8da26e268418ead4aa2365f816a08', "1,2", "tmp",
               "source", "destination", "destination_video_mezz", "destination_video_access",
               "destination_audio_access", "destination_poster", "topic"]
 
@@ -38,7 +39,7 @@ def video_packager():
 @pytest.fixture(autouse=True)
 def setup_and_teardown():
     """Fixture to create and tear down tmp dir before and after a test is run"""
-    dir_list = [AUDIO_ARGS[8], AUDIO_ARGS[9]]
+    dir_list = [AUDIO_ARGS[5], AUDIO_ARGS[6]]
     for dir in dir_list:
         tmp_dir = Path(dir)
         if not tmp_dir.is_dir():
@@ -56,7 +57,9 @@ def setup_and_teardown():
 
 
 @mock_ssm
+@mock_sts
 def test_get_config():
+    packager = Packager(*VIDEO_ARGS)
     ssm = boto3.client('ssm', region_name='us-east-1')
     path = "/dev/digitized-av-packaging"
     for name, value in [("foo", "bar"), ("baz", "buzz")]:
@@ -65,10 +68,11 @@ def test_get_config():
             Value=value,
             Type="SecureString",
         )
-    config = get_config(path, 'us-east-1')
+    config = packager.get_config(path)
     assert config == {'foo': 'bar', 'baz': 'buzz'}
 
 
+@patch('src.package.Packager.get_config')
 @patch('src.package.Packager.move_to_tmp')
 @patch('src.package.Packager.parse_format')
 @patch('src.package.Packager.create_poster')
@@ -79,7 +83,7 @@ def test_get_config():
 @patch('src.package.Packager.cleanup_successful_job')
 @patch('src.package.Packager.deliver_success_notification')
 def test_run(mock_notification, mock_cleanup, mock_deliver, mock_compress, mock_create,
-             mock_deliver_derivatives, mock_poster, mock_parse, mock_move):
+             mock_deliver_derivatives, mock_poster, mock_parse, mock_move, mock_config):
     """Asserts run method calls other methods."""
     packager = Packager(*AUDIO_ARGS)
     bag_dir = Path(packager.tmp_dir, packager.refid)
@@ -96,12 +100,15 @@ def test_run(mock_notification, mock_cleanup, mock_deliver, mock_compress, mock_
     mock_poster.assert_called_once_with(bag_dir)
     mock_parse.assert_called_once_with(file_list)
     mock_move.assert_called_once_with(bag_dir)
+    mock_config.assert_called_once_with(packager.ssm_parameter_path)
 
 
+@patch('src.package.Packager.get_config')
 @patch('src.package.Packager.move_to_tmp')
 @patch('src.package.Packager.cleanup_failed_job')
 @patch('src.package.Packager.deliver_failure_notification')
-def test_run_with_exception(mock_notification, mock_cleanup, mock_move):
+def test_run_with_exception(
+        mock_notification, mock_cleanup, mock_move, mock_config):
     packager = Packager(*AUDIO_ARGS)
     exception = Exception("Error moving.")
     mock_move.side_effect = exception
@@ -109,6 +116,7 @@ def test_run_with_exception(mock_notification, mock_cleanup, mock_move):
     mock_cleanup.assert_called_once_with(
         Path(packager.tmp_dir, packager.refid))
     mock_notification.assert_called_once_with(exception)
+    mock_config.assert_called_once_with(packager.ssm_parameter_path)
 
 
 def test_parse_format():
@@ -204,8 +212,10 @@ def test_deliver_derivatives():
 @patch('src.package.Packager.get_date_range')
 @patch('src.package.Packager.format_aspace_date')
 @patch('src.package.Packager.uri_from_refid')
-def test_create_bag(mock_uri, mock_dates, mock_range, audio_packager):
+def test_create_bag(mock_uri, mock_dates,
+                    mock_range, audio_packager):
     """Asserts bag is created as expected."""
+    audio_packager.as_client = ASpace().client
     as_uri = "/repositories/2/archival_objects/1234"
     as_dates = ('1999-01-01', '2000-12-31')
     mock_uri.return_value = as_uri
@@ -226,7 +236,7 @@ def test_create_bag(mock_uri, mock_dates, mock_range, audio_packager):
     assert bag.info['ArchivesSpace-URI'] == as_uri
     assert bag.info['Start-Date'] == as_dates[0]
     assert bag.info['End-Date'] == as_dates[1]
-    assert bag.info['Rights-ID'] == AUDIO_ARGS[7].split(',')
+    assert bag.info['Rights-ID'] == AUDIO_ARGS[4].split(',')
     assert bag.info['BagIt-Profile-Identifier'] == 'zorya_bagit_profile.json'
 
 
@@ -234,6 +244,8 @@ def test_create_bag(mock_uri, mock_dates, mock_range, audio_packager):
 def test_uri_from_refid(mock_get, audio_packager):
     """Asserts refids are translated to URIs as expected."""
     mock_get.return_value.text = "v3.0.2"
+    audio_packager.as_client = ASpace().client
+    audio_packager.as_repo = '2'
     refid = '12345'
     as_url = f'repositories/2/find_by_id/archival_objects?ref_id[]={refid}'
 
