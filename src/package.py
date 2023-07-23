@@ -20,7 +20,7 @@ logging.getLogger("bagit").setLevel(logging.ERROR)
 
 class Packager(object):
 
-    def __init__(self, region, role_arn, as_baseurl, as_repo, as_username, as_password, refid, rights_ids, tmp_dir, source_dir, destination_bucket,
+    def __init__(self, region, role_arn, ssm_parameter_path, refid, rights_ids, tmp_dir, source_dir, destination_bucket,
                  destination_bucket_video_mezzanine, destination_bucket_video_access, destination_bucket_audio_access, destination_bucket_poster, sns_topic):
         self.region = region
         self.role_arn = role_arn
@@ -34,12 +34,7 @@ class Packager(object):
         self.destination_bucket_audio_access = destination_bucket_audio_access
         self.destination_bucket_poster = destination_bucket_poster
         self.sns_topic = sns_topic
-        self.as_client = ASpace(
-            baseurl=as_baseurl,
-            username=as_username,
-            password=as_password
-        ).client
-        self.as_repo = as_repo
+        self.ssm_parameter_path = ssm_parameter_path
         logging.debug(self.__dict__)
 
     def run(self):
@@ -48,6 +43,13 @@ class Packager(object):
             f'Packaging started for package {self.refid}.')
         try:
             bag_dir = Path(self.tmp_dir, self.refid)
+            config = self.get_config(self.ssm_parameter_path)
+            self.as_client = ASpace(
+                baseurl=config.get('AS_BASEURL'),
+                username=config.get('AS_USERNAME'),
+                password=config.get('AS_PASSWORD')
+            ).client
+            self.as_repo = config.get('AS_REPO')
             self.move_to_tmp(bag_dir)
             self.format = self.parse_format(list(bag_dir.glob("*")))
             self.create_poster(bag_dir)
@@ -358,36 +360,35 @@ class Packager(object):
             })
         logging.debug('Failure notification delivered.')
 
+    def get_config(self, ssm_parameter_path):
+        """Fetch config values from Parameter Store.
 
-def get_config(ssm_parameter_path, region_name):
-    """Fetch config values from Parameter Store.
+        Args:
+            ssm_parameter_path (str): Path to parameters
 
-    Args:
-        ssm_parameter_path (str): Path to parameters
+        Returns:
+            configuration (dict): all parameters found at the supplied path.
+                The following keys are expected to be present:
+                    - AWS_ACCESS_KEY_ID
+                    - AWS_SECRET_ACCESS_KEY
+                    - AS_BASEURL
+                    - AS_REPO
+                    - AS_USERNAME
+                    - AS_PASSWORD
+        """
+        client = self.get_client_with_role('ssm', self.role_arn)
+        configuration = {}
+        param_details = client.get_parameters_by_path(
+            Path=ssm_parameter_path,
+            Recursive=False,
+            WithDecryption=True)
 
-    Returns:
-        configuration (dict): all parameters found at the supplied path.
-            The following keys are expected to be present:
-                - AWS_ACCESS_KEY_ID
-                - AWS_SECRET_ACCESS_KEY
-                - AS_BASEURL
-                - AS_REPO
-                - AS_USERNAME
-                - AS_PASSWORD
-    """
-    client = boto3.client('ssm', region_name=region_name)
-    configuration = {}
-    param_details = client.get_parameters_by_path(
-        Path=ssm_parameter_path,
-        Recursive=False,
-        WithDecryption=True)
+        for param in param_details.get('Parameters', []):
+            param_path_array = param.get('Name').split("/")
+            section_name = param_path_array[-1]
+            configuration[section_name] = param.get('Value')
 
-    for param in param_details.get('Parameters', []):
-        param_path_array = param.get('Name').split("/")
-        section_name = param_path_array[-1]
-        configuration[section_name] = param.get('Value')
-
-    return configuration
+        return configuration
 
 
 if __name__ == '__main__':
@@ -406,20 +407,12 @@ if __name__ == '__main__':
         'AWS_DESTINATION_BUCKET_AUDIO_ACCESS')
     destination_bucket_poster = os.environ.get('AWS_DESTINATION_BUCKET_POSTER')
     sns_topic = os.environ.get('AWS_SNS_TOPIC')
-
     ssm_parameter_path = f"/{os.environ.get('ENV')}/{os.environ.get('APP_CONFIG_PATH')}"
-    config = get_config(ssm_parameter_path, region)
-    as_baseurl = config.get('AS_BASEURL')
-    as_repo = config.get('AS_REPO')
-    as_username = config.get('AS_USERNAME')
-    as_password = config.get('AS_PASSWORD')
+
     Packager(
         region,
         role_arn,
-        as_baseurl,
-        as_repo,
-        as_username,
-        as_password,
+        ssm_parameter_path,
         refid,
         rights_ids,
         tmp_dir,
