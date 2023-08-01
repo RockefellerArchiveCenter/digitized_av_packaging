@@ -127,6 +127,7 @@ Resources:
   DigitizedAvPackagingRole:
     Type: AWS::IAM::Role
     Properties: 
+      RoleName: digitized-av-packaging-role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -145,11 +146,13 @@ Resources:
               - Effect: Allow
                 Action: 
                   - 's3:PutObject'
+                  - 's3:CreateMultipartUpload'
                 Resource: 
                   - !Sub '${PosterBucket.Arn}/*'
                   - !Sub '${AudioAccessBucket.Arn}/*'
                   - !Sub '${VideoAccessBucket.Arn}/*'
                   - !Sub '${VideoMezzanineBucket.Arn}/*'
+                  - !Sub 'arn:aws:s3:::${DestinationBucketName}/*'
         - PolicyName: DigitizedAvPackagingSNSPolicy
           PolicyDocument:
             Version: '2012-10-17'
