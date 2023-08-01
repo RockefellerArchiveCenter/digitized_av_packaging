@@ -35,6 +35,8 @@ class Packager(object):
         self.destination_bucket_poster = destination_bucket_poster
         self.sns_topic = sns_topic
         self.ssm_parameter_path = ssm_parameter_path
+        if not Path(self.tmp_dir).is_dir():
+            Path(self.tmp_dir).mkdir(parents=True)
         logging.debug(self.__dict__)
 
     def run(self):
