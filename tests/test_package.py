@@ -91,7 +91,7 @@ def test_run(mock_notification, mock_cleanup, mock_deliver, mock_compress, mock_
     mock_compress.return_value = compressed_name
     file_list = []
     packager.run()
-    mock_cleanup.assert_called_once_with(bag_dir)
+    mock_cleanup.assert_called_once_with()
     mock_notification.assert_called_once_with()
     mock_deliver.assert_called_once_with(compressed_name)
     mock_compress.assert_called_once_with(bag_dir)
@@ -329,18 +329,14 @@ def test_cleanup_successful_job(audio_packager):
         'tests',
         'fixtures',
         'b90862f3baceaae3b7418c78f9d50d52')
-    tmp_path = Path(audio_packager.tmp_dir, audio_packager.refid)
     src_path = Path(audio_packager.source_dir, audio_packager.refid)
-    copytree(fixture_path, tmp_path)
     copytree(fixture_path, src_path)
 
-    audio_packager.cleanup_successful_job(tmp_path)
+    audio_packager.cleanup_successful_job()
 
     source_objects = list(src_path.glob('*'))
-    temp_objects = list(tmp_path.glob('*'))
 
     assert len(source_objects) == 0
-    assert len(temp_objects) == 0
 
 
 def test_cleanup_failed_job(audio_packager):

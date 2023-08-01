@@ -59,7 +59,7 @@ class Packager(object):
             self.create_bag(bag_dir, self.rights_ids)
             compressed_path = self.compress_bag(bag_dir)
             self.deliver_package(compressed_path)
-            self.cleanup_successful_job(bag_dir)
+            self.cleanup_successful_job()
             self.deliver_success_notification()
             logging.info(
                 f'{self.format} package {self.refid} successfully packaged.')
@@ -285,9 +285,8 @@ class Packager(object):
         package_path.unlink()
         logging.debug('Packaged delivered.')
 
-    def cleanup_successful_job(self, bag_path):
+    def cleanup_successful_job(self):
         """Remove artifacts from successful job."""
-        rmtree(bag_path)
         rmtree(Path(self.source_dir, self.refid))
         logging.debug('Cleanup from successful job completed.')
 
