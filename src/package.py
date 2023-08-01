@@ -59,7 +59,7 @@ class Packager(object):
             self.create_bag(bag_dir, self.rights_ids)
             compressed_path = self.compress_bag(bag_dir)
             self.deliver_package(compressed_path)
-            self.cleanup_successful_job()
+            self.cleanup_successful_job(compressed_path)
             self.deliver_success_notification()
             logging.info(
                 f'{self.format} package {self.refid} successfully packaged.')
