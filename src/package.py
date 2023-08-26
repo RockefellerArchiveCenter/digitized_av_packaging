@@ -1,6 +1,7 @@
 import logging
 import os
 import tarfile
+import traceback
 from datetime import datetime
 from pathlib import Path
 from shutil import copytree, rmtree
@@ -334,6 +335,7 @@ class Packager(object):
             exception (Exception): the exception that was thrown.
         """
         client = self.get_client_with_role('sns', self.role_arn)
+        tb = '\n'.join(traceback.format_exception(exception))
         client.publish(
             TopicArn=self.sns_topic,
             Message=f'{getattr(self, "format", "unknown format")} package {self.refid} failed packaging',
@@ -356,7 +358,7 @@ class Packager(object):
                 },
                 'message': {
                     'DataType': 'String',
-                    'StringValue': str(exception),
+                    'StringValue': f'{str(exception)}\n\n{tb}',
                 }
             })
         logging.debug('Failure notification delivered.')
