@@ -58,9 +58,11 @@ def setup_and_teardown():
 
 @mock_ssm
 @mock_sts
-def test_get_config():
+@patch('src.package.Packager.get_client_with_role')
+def test_get_config(mock_role):
     packager = Packager(*VIDEO_ARGS)
     ssm = boto3.client('ssm', region_name='us-east-1')
+    mock_role.return_value = ssm
     path = "/dev/digitized-av-packaging"
     for name, value in [("foo", "bar"), ("baz", "buzz")]:
         ssm.put_parameter(
@@ -362,10 +364,12 @@ def test_cleanup_failed_job(audio_packager):
 @mock_sns
 @mock_sqs
 @mock_sts
-def test_deliver_success_notification():
+@patch('src.package.Packager.get_client_with_role')
+def test_deliver_success_notification(mock_role):
     """Assert success notifications are delivered as expected."""
     packager = Packager(*AUDIO_ARGS)
     sns = boto3.client('sns', region_name='us-east-1')
+    mock_role.return_value = sns
     topic_arn = sns.create_topic(Name='my-topic')['TopicArn']
     sqs_conn = boto3.resource("sqs", region_name="us-east-1")
     sqs_conn.create_queue(QueueName="test-queue")
@@ -391,10 +395,12 @@ def test_deliver_success_notification():
 @mock_sns
 @mock_sqs
 @mock_sts
-def test_deliver_failure_notification():
+@patch('src.package.Packager.get_client_with_role')
+def test_deliver_failure_notification(mock_role):
     """Asserts failure notifications are delivered as expected."""
     packager = Packager(*AUDIO_ARGS)
     sns = boto3.client('sns', region_name='us-east-1')
+    mock_role.return_value = sns
     topic_arn = sns.create_topic(Name='my-topic')['TopicArn']
     sqs_conn = boto3.resource("sqs", region_name="us-east-1")
     sqs_conn.create_queue(QueueName="test-queue")

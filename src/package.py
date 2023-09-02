@@ -2,7 +2,6 @@ import logging
 import os
 import tarfile
 import traceback
-from datetime import datetime
 from pathlib import Path
 from shutil import copytree, rmtree
 
@@ -11,6 +10,7 @@ import boto3
 import ffmpeg
 from asnake.aspace import ASpace
 from asnake.utils import find_closest_value
+from aws_assume_role_lib import assume_role
 from dateutil import parser, relativedelta
 
 logging.basicConfig(
@@ -72,20 +72,9 @@ class Packager(object):
 
     def get_client_with_role(self, resource, role_arn):
         """Gets Boto3 client which authenticates with a specific IAM role."""
-        now = datetime.now()
-        timestamp = now.timestamp()
-        sts = boto3.client('sts', region_name=self.region)
-        role = sts.assume_role(
-            RoleArn=role_arn,
-            RoleSessionName=f'digitized-av-validation-{timestamp}')
-        credentials = role['Credentials']
-        client = boto3.client(
-            resource,
-            region_name=self.region,
-            aws_access_key_id=credentials['AccessKeyId'],
-            aws_secret_access_key=credentials['SecretAccessKey'],
-            aws_session_token=credentials['SessionToken'],)
-        return client
+        session = boto3.Session()
+        assumed_role_session = assume_role(session, role_arn)
+        return assumed_role_session.client(resource)
 
     def move_to_tmp(self, dest_dir):
         """Moves files from source directory into temporary directory
