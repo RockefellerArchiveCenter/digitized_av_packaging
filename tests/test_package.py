@@ -125,19 +125,19 @@ def test_parse_format():
     """Asserts format is correctly parsed from files."""
     packager = Packager(*AUDIO_ARGS)
     video_files = [
-        Path(f'{packager.refid}_ma.mkv'),
-        Path(f'{packager.refid}_me.mov'),
-        Path(f'{packager.refid}_a.mp4')]
+        Path(f'{packager.refid}.mkv'),
+        Path(f'{packager.refid}.mov'),
+        Path(f'{packager.refid}.mp4')]
     audio_files = [
-        Path(f'{packager.refid}_ma.wav'),
-        Path(f'{packager.refid}_a.mp3')]
+        Path(f'{packager.refid}.wav'),
+        Path(f'{packager.refid}.mp3')]
     for expected, file_list in [
             ('audio', audio_files), ('video', video_files)]:
         assert expected == packager.parse_format(file_list)
 
     unrecognized_files = [
-        Path(f'{packager.refid}_ma.tif'),
-        Path(f'{packager.refid}_a.jpg')]
+        Path(f'{packager.refid}.tif'),
+        Path(f'{packager.refid}.jpg')]
     with pytest.raises(Exception):
         packager.parse_format(unrecognized_files)
 
@@ -158,7 +158,7 @@ def test_derivative_map_audio(audio_packager):
     map = audio_packager.derivative_map()
     assert len(map) == 1
     assert map == [
-        (bag_dir / f"{audio_packager.refid}_a.mp3",
+        (bag_dir / f"{audio_packager.refid}.mp3",
          audio_packager.destination_bucket_audio_access,
          'audio/mpeg')]
 
@@ -169,9 +169,9 @@ def test_derivative_map_video(video_packager):
     map = video_packager.derivative_map()
     assert len(map) == 3
     assert map == [
-        (bag_dir / f"{video_packager.refid}_me.mov",
+        (bag_dir / f"{video_packager.refid}.mov",
             video_packager.destination_bucket_video_mezzanine, "video/quicktime"),
-        (bag_dir / f"{video_packager.refid}_a.mp4",
+        (bag_dir / f"{video_packager.refid}.mp4",
             video_packager.destination_bucket_video_access, "video/mp4"),
         (bag_dir / "poster.png",
             video_packager.destination_bucket_poster, "image/x-png")]
@@ -205,9 +205,9 @@ def test_deliver_derivatives():
     assert s3.get_object(
         Bucket=packager.destination_bucket_poster,
         Key=f"{packager.refid}.png")
-    assert Path(tmp_path, f"{packager.refid}_ma.mov").is_file()
-    assert not Path(tmp_path, f"{packager.refid}_me.mov").is_file()
-    assert not Path(tmp_path, f"{packager.refid}_a.mp4").is_file()
+    assert Path(tmp_path, f"{packager.refid}.mkv").is_file()
+    assert not Path(tmp_path, f"{packager.refid}.mov").is_file()
+    assert not Path(tmp_path, f"{packager.refid}.mp4").is_file()
     assert not Path(tmp_path, "poster.png").is_file()
 
 
