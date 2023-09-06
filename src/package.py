@@ -108,7 +108,7 @@ class Packager(object):
             poster = Path(bag_dir, 'poster.png')
             (
                 ffmpeg
-                .input(Path(bag_dir, f'{self.refid}_a.mp4'))
+                .input(Path(bag_dir, f'{self.refid}.mp4'))
                 .filter('thumbnail', 300)
                 .output(str(poster), loglevel="quiet", **{'frames:v': 1})
                 .run()
@@ -124,16 +124,16 @@ class Packager(object):
         bag_path = Path(self.tmp_dir, self.refid)
         if self.format == 'video':
             return [
-                (bag_path / f"{self.refid}_me.mov",
+                (bag_path / f"{self.refid}.mov",
                  self.destination_bucket_video_mezzanine,
                  "video/quicktime"),
-                (bag_path / f"{self.refid}_a.mp4",
+                (bag_path / f"{self.refid}.mp4",
                  self.destination_bucket_video_access, "video/mp4"),
                 (bag_path / "poster.png", self.destination_bucket_poster, "image/x-png")
             ]
         else:
             return [
-                (bag_path / f"{self.refid}_a.mp3",
+                (bag_path / f"{self.refid}.mp3",
                  self.destination_bucket_audio_access, "audio/mpeg"),
             ]
 
