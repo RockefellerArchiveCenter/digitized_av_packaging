@@ -325,7 +325,7 @@ class Packager(object):
             exception (Exception): the exception that was thrown.
         """
         client = self.get_client_with_role('sns', self.role_arn)
-        tb = '\n'.join(traceback.format_exception(exception))
+        tb = ''.join(traceback.format_exception(exception)[:-1])
         client.publish(
             TopicArn=self.sns_topic,
             Message=f'{getattr(self, "format", "unknown format")} package {self.refid} failed packaging',
@@ -348,7 +348,7 @@ class Packager(object):
                 },
                 'message': {
                     'DataType': 'String',
-                    'StringValue': f'{str(exception)}\n\n{tb}',
+                    'StringValue': f'{str(exception)}\n\n<pre>{tb}</pre>',
                 }
             })
         logging.debug('Failure notification delivered.')
