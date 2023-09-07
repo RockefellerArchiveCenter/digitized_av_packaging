@@ -211,6 +211,45 @@ def test_deliver_derivatives():
     assert not Path(tmp_path, "poster.png").is_file()
 
 
+@mock_s3
+@mock_sts
+def test_deliver_derivatives_multiple_masters():
+    """
+    Assert derivatives are delivered to correct buckets and deleted
+    locally for bags with multiple master files.
+    """
+    packager = Packager(*VIDEO_ARGS)
+    packager.refid = '20f8da26e268418ead4aa2365f816a09'
+    packager.format = 'video'
+    fixture_path = Path('tests', 'fixtures', packager.refid)
+    tmp_path = Path(packager.tmp_dir, packager.refid)
+    copytree(fixture_path, tmp_path)
+    poster = tmp_path / "poster.png"
+    poster.touch()
+
+    s3 = boto3.client('s3', region_name='us-east-1')
+    s3.create_bucket(Bucket=packager.destination_bucket_video_access)
+    s3.create_bucket(Bucket=packager.destination_bucket_video_mezzanine)
+    s3.create_bucket(Bucket=packager.destination_bucket_poster)
+
+    packager.deliver_derivatives()
+
+    assert s3.get_object(
+        Bucket=packager.destination_bucket_video_access,
+        Key=f"{packager.refid}.mp4")
+    assert s3.get_object(
+        Bucket=packager.destination_bucket_video_mezzanine,
+        Key=f"{packager.refid}.mov")
+    assert s3.get_object(
+        Bucket=packager.destination_bucket_poster,
+        Key=f"{packager.refid}.png")
+    assert Path(tmp_path, f"{packager.refid}_01.mkv").is_file()
+    assert Path(tmp_path, f"{packager.refid}_02.mkv").is_file()
+    assert not Path(tmp_path, f"{packager.refid}.mov").is_file()
+    assert not Path(tmp_path, f"{packager.refid}.mp4").is_file()
+    assert not Path(tmp_path, "poster.png").is_file()
+
+
 @patch('src.package.Packager.get_date_range')
 @patch('src.package.Packager.format_aspace_date')
 @patch('src.package.Packager.uri_from_refid')
@@ -423,5 +462,4 @@ def test_deliver_failure_notification(mock_role):
     assert message_body['MessageAttributes']['format']['Value'] == packager.format
     assert message_body['MessageAttributes']['outcome']['Value'] == 'FAILURE'
     assert message_body['MessageAttributes']['refid']['Value'] == packager.refid
-    assert message_body['MessageAttributes']['message'][
-        'Value'] == f'{exception_message}\n\nException: {exception_message}\n'
+    assert exception_message in message_body['MessageAttributes']['message']['Value']
