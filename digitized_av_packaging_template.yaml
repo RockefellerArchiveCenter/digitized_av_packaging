@@ -5,9 +5,6 @@ Description: >
   Handles packaging of incoming digitized audiovisual assets.
 
 Parameters:
-  ContainerImageName:
-    Type: String
-    Description: Name of container used in this task.
   ContainerAccountId:
     Type: String
     Description: Account ID under which container repository is located.
@@ -27,9 +24,15 @@ Parameters:
   EfsAccessPointId:
     Type: String
     Description: Identifier for temporary storage EFS access point.
+  EfsRootPath:
+    Type: String
+    Description: Root path at which EFS is mounted.
   StoragePath:
     Type: String
-    Description: Location in EFS mount at which files are stored.
+    Description: Location in EFS mount at which source files are stored.
+  TemporaryPath:
+    Type: String
+    Description: Location in EFS mount at which files are unpacked.
   DestinationBucketName:
     Type: String
     Description: Name of S3 bucket to which packaged files should be delivered.
@@ -88,39 +91,84 @@ Resources:
       Type: String
       Value: !Ref ArchivesSpacePassword
 
-  DigitizedAvPackagingRole:
+  ECSTaskExecutionRole:
     Type: AWS::IAM::Role
-    Properties: 
+    Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
               Service:
-                - ecs.amazonaws.com
+                - ecs-tasks.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: CreateLogGroupPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - 'logs:CreateLogGroup'
+                Resource: 
+                  - '*'
+
+  DigitizedAvPackagingUser:
+    Type: AWS::IAM::User
+
+  DigitizedAvPackagingUserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties: 
+      UserName: !Ref DigitizedAvPackagingUser
+
+  DigitizedAvPackagingRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      RoleName: digitized-av-packaging-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS:
+                - !GetAtt DigitizedAvPackagingUser.Arn
             Action:
               - 'sts:AssumeRole'
       Description: !Sub 'Allows management of S3 assets and creation of SNS messages.'
       Policies:
-        - PolicyName: DigitizedAvValidationS3ObjectPolicy
+        - PolicyName: DigitizedAvPackagingS3ObjectPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action: 
                   - 's3:PutObject'
+                  - 's3:CreateMultipartUpload'
                 Resource: 
                   - !Sub '${PosterBucket.Arn}/*'
                   - !Sub '${AudioAccessBucket.Arn}/*'
                   - !Sub '${VideoAccessBucket.Arn}/*'
                   - !Sub '${VideoMezzanineBucket.Arn}/*'
-        - PolicyName: DigitizedAvValidationSNSPolicy
+                  - !Sub 'arn:aws:s3:::${DestinationBucketName}/*'
+        - PolicyName: DigitizedAvPackagingSNSPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action: 'sns:Publish'
                 Resource: !ImportValue DigitizedAV-SNSTopicArn
+        - PolicyName: DigitizedAvPackagingSSMPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - 'ssm:GetParametersByPath'
+                Resource:
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ApplicationEnvironment}/${ApplicationName}
 
   PackagingECSTask:
     Type: AWS::ECS::TaskDefinition
@@ -128,18 +176,26 @@ Resources:
       Cpu: 1024
       Memory: 3072
       ContainerDefinitions: 
-        - Name: !Ref ContainerImageName
-          Image: !Sub "${ContainerAccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ContainerImageName}:latest"
+        - Name: !Ref ApplicationName
+          Image: !Sub "${ContainerAccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ApplicationName}:latest"
           Essential: true
           Environment:
             - Name: ENV
               Value: !Ref ApplicationEnvironment
             - Name: APP_CONFIG_PATH
               Value: !Ref ApplicationName
-            - Name: AWS_REGION_NAME
+            - Name: AWS_ACCESS_KEY_ID
+              Value: !Ref DigitizedAvPackagingUserAccessKey
+            - Name: AWS_SECRET_ACCESS_KEY
+              Value: !GetAtt DigitizedAvPackagingUserAccessKey.SecretAccessKey
+            - Name: AWS_REGION
               Value: !Ref AWS::Region
             - Name: AWS_ROLE_ARN
               Value: !GetAtt DigitizedAvPackagingRole.Arn
+            - Name: SOURCE_DIR
+              Value: !Sub '${EfsRootPath}/${StoragePath}'
+            - Name: TMP_DIR
+              Value: !Sub '${EfsRootPath}/${TemporaryPath}'
             - Name: AWS_DESTINATION_BUCKET
               Value: !Ref DestinationBucketName
             - Name: AWS_DESTINATION_BUCKET_POSTER
@@ -154,17 +210,17 @@ Resources:
               Value: !ImportValue DigitizedAV-SNSTopicArn      
           MountPoints:
             - SourceVolume: efs
-              ContainerPath: !Ref StoragePath
+              ContainerPath: !Ref EfsRootPath
               ReadOnly: false
           LogConfiguration:
             LogDriver: awslogs
             Options:
               "awslogs-create-group": "true"
-              "awslogs-group": !Sub "/ecs/${ContainerImageName}"
-              "awslogs-region": "us-east-1"
+              "awslogs-group": !Sub "/ecs/${ApplicationName}"
+              "awslogs-region": !Ref AWS::Region
               "awslogs-stream-prefix": "ecs"
-      ExecutionRoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/ecsTaskExecutionRole
-      Family: !Ref ContainerImageName
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      Family: !Ref ApplicationName
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE

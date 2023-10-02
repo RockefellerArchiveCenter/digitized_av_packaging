@@ -1,7 +1,7 @@
 import logging
 import os
 import tarfile
-from datetime import datetime
+import traceback
 from pathlib import Path
 from shutil import copytree, rmtree
 
@@ -10,6 +10,7 @@ import boto3
 import ffmpeg
 from asnake.aspace import ASpace
 from asnake.utils import find_closest_value
+from aws_assume_role_lib import assume_role
 from dateutil import parser, relativedelta
 
 logging.basicConfig(
@@ -20,7 +21,7 @@ logging.getLogger("bagit").setLevel(logging.ERROR)
 
 class Packager(object):
 
-    def __init__(self, region, role_arn, as_baseurl, as_repo, as_username, as_password, refid, rights_ids, tmp_dir, source_dir, destination_bucket,
+    def __init__(self, region, role_arn, ssm_parameter_path, refid, rights_ids, tmp_dir, source_dir, destination_bucket,
                  destination_bucket_video_mezzanine, destination_bucket_video_access, destination_bucket_audio_access, destination_bucket_poster, sns_topic):
         self.region = region
         self.role_arn = role_arn
@@ -34,12 +35,10 @@ class Packager(object):
         self.destination_bucket_audio_access = destination_bucket_audio_access
         self.destination_bucket_poster = destination_bucket_poster
         self.sns_topic = sns_topic
-        self.as_client = ASpace(
-            baseurl=as_baseurl,
-            username=as_username,
-            password=as_password
-        ).client
-        self.as_repo = as_repo
+        self.ssm_parameter_path = ssm_parameter_path
+        self.service_name = 'digitized_av_packaging'
+        if not Path(self.tmp_dir).is_dir():
+            Path(self.tmp_dir).mkdir(parents=True)
         logging.debug(self.__dict__)
 
     def run(self):
@@ -48,6 +47,13 @@ class Packager(object):
             f'Packaging started for package {self.refid}.')
         try:
             bag_dir = Path(self.tmp_dir, self.refid)
+            config = self.get_config(self.ssm_parameter_path)
+            self.as_client = ASpace(
+                baseurl=config.get('AS_BASEURL'),
+                username=config.get('AS_USERNAME'),
+                password=config.get('AS_PASSWORD')
+            ).client
+            self.as_repo = config.get('AS_REPO')
             self.move_to_tmp(bag_dir)
             self.format = self.parse_format(list(bag_dir.glob("*")))
             self.create_poster(bag_dir)
@@ -66,20 +72,9 @@ class Packager(object):
 
     def get_client_with_role(self, resource, role_arn):
         """Gets Boto3 client which authenticates with a specific IAM role."""
-        now = datetime.now()
-        timestamp = now.timestamp()
-        sts = boto3.client('sts', region_name=self.region)
-        role = sts.assume_role(
-            RoleArn=role_arn,
-            RoleSessionName=f'digitized-av-validation-{timestamp}')
-        credentials = role['Credentials']
-        client = boto3.client(
-            resource,
-            region_name=self.region,
-            aws_access_key_id=credentials['AccessKeyId'],
-            aws_secret_access_key=credentials['SecretAccessKey'],
-            aws_session_token=credentials['SessionToken'],)
-        return client
+        session = boto3.Session()
+        assumed_role_session = assume_role(session, role_arn)
+        return assumed_role_session.client(resource)
 
     def move_to_tmp(self, dest_dir):
         """Moves files from source directory into temporary directory
@@ -113,7 +108,7 @@ class Packager(object):
             poster = Path(bag_dir, 'poster.png')
             (
                 ffmpeg
-                .input(Path(bag_dir, f'{self.refid}_a.mp4'))
+                .input(Path(bag_dir, f'{self.refid}.mp4'))
                 .filter('thumbnail', 300)
                 .output(str(poster), loglevel="quiet", **{'frames:v': 1})
                 .run()
@@ -129,16 +124,16 @@ class Packager(object):
         bag_path = Path(self.tmp_dir, self.refid)
         if self.format == 'video':
             return [
-                (bag_path / f"{self.refid}_me.mov",
+                (bag_path / f"{self.refid}.mov",
                  self.destination_bucket_video_mezzanine,
                  "video/quicktime"),
-                (bag_path / f"{self.refid}_a.mp4",
+                (bag_path / f"{self.refid}.mp4",
                  self.destination_bucket_video_access, "video/mp4"),
                 (bag_path / "poster.png", self.destination_bucket_poster, "image/x-png")
             ]
         else:
             return [
-                (bag_path / f"{self.refid}_a.mp3",
+                (bag_path / f"{self.refid}.mp3",
                  self.destination_bucket_audio_access, "audio/mpeg"),
             ]
 
@@ -281,9 +276,8 @@ class Packager(object):
         package_path.unlink()
         logging.debug('Packaged delivered.')
 
-    def cleanup_successful_job(self, bag_path):
+    def cleanup_successful_job(self):
         """Remove artifacts from successful job."""
-        rmtree(bag_path)
         rmtree(Path(self.source_dir, self.refid))
         logging.debug('Cleanup from successful job completed.')
 
@@ -315,7 +309,7 @@ class Packager(object):
                 },
                 'service': {
                     'DataType': 'String',
-                    'StringValue': 'digitized_av_packaging',
+                    'StringValue': self.service_name,
                 },
                 'outcome': {
                     'DataType': 'String',
@@ -331,6 +325,7 @@ class Packager(object):
             exception (Exception): the exception that was thrown.
         """
         client = self.get_client_with_role('sns', self.role_arn)
+        tb = ''.join(traceback.format_exception(exception)[:-1])
         client.publish(
             TopicArn=self.sns_topic,
             Message=f'{getattr(self, "format", "unknown format")} package {self.refid} failed packaging',
@@ -345,7 +340,7 @@ class Packager(object):
                 },
                 'service': {
                     'DataType': 'String',
-                    'StringValue': 'digitized_av_packaging',
+                    'StringValue': self.service_name,
                 },
                 'outcome': {
                     'DataType': 'String',
@@ -353,41 +348,40 @@ class Packager(object):
                 },
                 'message': {
                     'DataType': 'String',
-                    'StringValue': str(exception),
+                    'StringValue': f'{str(exception)}\n\n<pre>{tb}</pre>',
                 }
             })
         logging.debug('Failure notification delivered.')
 
+    def get_config(self, ssm_parameter_path):
+        """Fetch config values from Parameter Store.
 
-def get_config(ssm_parameter_path, region_name):
-    """Fetch config values from Parameter Store.
+        Args:
+            ssm_parameter_path (str): Path to parameters
 
-    Args:
-        ssm_parameter_path (str): Path to parameters
+        Returns:
+            configuration (dict): all parameters found at the supplied path.
+                The following keys are expected to be present:
+                    - AWS_ACCESS_KEY_ID
+                    - AWS_SECRET_ACCESS_KEY
+                    - AS_BASEURL
+                    - AS_REPO
+                    - AS_USERNAME
+                    - AS_PASSWORD
+        """
+        client = self.get_client_with_role('ssm', self.role_arn)
+        configuration = {}
+        param_details = client.get_parameters_by_path(
+            Path=ssm_parameter_path,
+            Recursive=False,
+            WithDecryption=True)
 
-    Returns:
-        configuration (dict): all parameters found at the supplied path.
-            The following keys are expected to be present:
-                - AWS_ACCESS_KEY_ID
-                - AWS_SECRET_ACCESS_KEY
-                - AS_BASEURL
-                - AS_REPO
-                - AS_USERNAME
-                - AS_PASSWORD
-    """
-    client = boto3.client('ssm', region_name=region_name)
-    configuration = {}
-    param_details = client.get_parameters_by_path(
-        Path=ssm_parameter_path,
-        Recursive=False,
-        WithDecryption=True)
+        for param in param_details.get('Parameters', []):
+            param_path_array = param.get('Name').split("/")
+            section_name = param_path_array[-1]
+            configuration[section_name] = param.get('Value')
 
-    for param in param_details.get('Parameters', []):
-        param_path_array = param.get('Name').split("/")
-        section_name = param_path_array[-1]
-        configuration[section_name] = param.get('Value')
-
-    return configuration
+        return configuration
 
 
 if __name__ == '__main__':
@@ -406,20 +400,12 @@ if __name__ == '__main__':
         'AWS_DESTINATION_BUCKET_AUDIO_ACCESS')
     destination_bucket_poster = os.environ.get('AWS_DESTINATION_BUCKET_POSTER')
     sns_topic = os.environ.get('AWS_SNS_TOPIC')
-
     ssm_parameter_path = f"/{os.environ.get('ENV')}/{os.environ.get('APP_CONFIG_PATH')}"
-    config = get_config(ssm_parameter_path, region)
-    as_baseurl = config.get('AS_BASEURL')
-    as_repo = config.get('AS_REPO')
-    as_username = config.get('AS_USERNAME')
-    as_password = config.get('AS_PASSWORD')
+
     Packager(
         region,
         role_arn,
-        as_baseurl,
-        as_repo,
-        as_username,
-        as_password,
+        ssm_parameter_path,
         refid,
         rights_ids,
         tmp_dir,
