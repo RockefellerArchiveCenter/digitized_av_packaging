@@ -91,10 +91,9 @@ class Packager(object):
         Args:
             file_list (list of pathlib.Path instances): List of filepaths in a bag.
         """
-        if len(file_list) == 2 and any(
-                [f.suffix == '.mp3' for f in file_list]):
+        if any([f.suffix == '.mp3' for f in file_list]):
             return 'audio'
-        elif len(file_list) == 3 and any([f.suffix == '.mp4' for f in file_list]):
+        elif any([f.suffix == '.mp4' for f in file_list]):
             return 'video'
         raise Exception(f'Unrecognized package format for files {file_list}.')
 
