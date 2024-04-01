@@ -91,10 +91,9 @@ class Packager(object):
         Args:
             file_list (list of pathlib.Path instances): List of filepaths in a bag.
         """
-        if len(file_list) == 2 and any(
-                [f.suffix == '.mp3' for f in file_list]):
+        if any([f.suffix == '.mp3' for f in file_list]):
             return 'audio'
-        elif len(file_list) == 3 and any([f.suffix == '.mp4' for f in file_list]):
+        elif any([f.suffix == '.mp4' for f in file_list]):
             return 'video'
         raise Exception(f'Unrecognized package format for files {file_list}.')
 
@@ -161,7 +160,9 @@ class Packager(object):
     def uri_from_refid(self, refid):
         """Uses the find_by_id endpoint in AS to return the URI of an archival object."""
         find_by_refid_url = f"repositories/{self.as_repo}/find_by_id/archival_objects?ref_id[]={refid}"
-        results = self.as_client.get(find_by_refid_url).json()
+        resp = self.as_client.get(find_by_refid_url)
+        resp.raise_for_status()
+        results = resp.json()
         if len(results.get("archival_objects")) == 1:
             return results['archival_objects'][0]['ref']
         else:
