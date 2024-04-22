@@ -1,4 +1,4 @@
-FROM python:3.10-slim-buster as base
+FROM python:3.11-slim-buster as base
 RUN apt update -y && apt install -y ffmpeg
 WORKDIR /code
 COPY requirements.txt .
