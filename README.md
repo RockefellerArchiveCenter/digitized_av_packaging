@@ -1,8 +1,6 @@
 # digitized_av_packaging
 Packager for digitized audiovisual assets.
 
-[![Build Status](https://app.travis-ci.com/RockefellerArchiveCenter/digitized_av_packaging.svg?branch=base)](https://app.travis-ci.com/RockefellerArchiveCenter/digitized_av_packaging)
-
 ## Getting Started
 
 If you have [git](https://git-scm.com/) and [Docker](https://www.docker.com/community-edition) installed, using this repository is as simple as:
