@@ -12,6 +12,6 @@ class MockResponse(object):
     def json(self):
         """Mocks the json method of an HTTP response"""
         return self.json_data
-    
+
     def raise_for_status(self):
         pass
