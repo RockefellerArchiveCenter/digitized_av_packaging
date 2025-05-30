@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from shutil import copyfile, copytree, rmtree
-from unittest.mock import DEFAULT, MagicMock, patch
+from unittest.mock import ANY, DEFAULT, MagicMock, patch
 
 import bagit
 import boto3
@@ -11,6 +11,8 @@ from moto import mock_s3, mock_sns, mock_sqs, mock_ssm, mock_sts
 from moto.core import DEFAULT_ACCOUNT_ID
 
 from src.package import Packager
+
+from .helpers import MockResponse
 
 AUDIO_ARGS = ['us-east-1', 'digitized-av-packaging-role-arn', '/dev/digitized_av_packaging',
               'b90862f3baceaae3b7418c78f9d50d52', "1,2", "tmp",
@@ -56,22 +58,6 @@ def setup_and_teardown():
         rmtree(dir)
 
 
-class MockResponse(object):
-    """Class used to mock HTTP responses"""
-
-    def __init__(self, json_data, status_code, **kwargs):
-        """Sets data, status code, and any other data passed in."""
-        self.json_data = json_data
-        self.status_code = status_code
-        self.text = "v4.0.0"
-        for k in kwargs:
-            setattr(self, k, kwargs[k])
-
-    def json(self):
-        """Mocks the json method of an HTTP response"""
-        return self.json_data
-
-
 @mock_ssm
 @mock_sts
 @patch('src.package.Packager.get_client_with_role')
@@ -91,50 +77,98 @@ def test_get_config(mock_role):
 
 
 @patch('src.package.Packager.get_config')
+@patch('src.clients.AquilaClient.__init__')
 @patch('src.package.Packager.move_to_tmp')
+@patch('src.package.Packager.uri_from_refid')
+@patch('src.package.Packager.get_as_data')
+@patch('src.clients.AquilaClient.get_rights_data')
 @patch('src.package.Packager.parse_format')
 @patch('src.package.Packager.create_poster')
 @patch('src.package.Packager.deliver_derivatives')
 @patch('src.package.Packager.create_bag')
+@patch('src.package.Packager.get_bag_json')
 @patch('src.package.Packager.compress_bag')
 @patch('src.package.Packager.deliver_package')
 @patch('src.package.Packager.cleanup_successful_job')
 @patch('src.package.Packager.deliver_success_notification')
-def test_run(mock_notification, mock_cleanup, mock_deliver, mock_compress, mock_create,
-             mock_deliver_derivatives, mock_poster, mock_parse, mock_move, mock_config):
+def test_run(mock_notification, mock_cleanup, mock_deliver, mock_compress, mock_bag_json, mock_create,
+             mock_deliver_derivatives, mock_poster, mock_parse, mock_rights_data, mock_as_data, mock_as_uri,
+             mock_move, mock_aquila, mock_config):
     """Asserts run method calls other methods."""
     packager = Packager(*AUDIO_ARGS)
     bag_dir = Path(packager.tmp_dir, packager.refid)
+    aquila_baseurl = 'https://aquila.rockarch.org/api/'
+    mock_aquila.return_value = None
+    config = {'AQUILA_BASEURL': aquila_baseurl}
+    mock_config.return_value = config
+    as_uri = '/repositories/2/archival_objects/1'
+    mock_as_uri.return_value = as_uri
+    rights_data = []
+    mock_rights_data.return_value = rights_data
+    mock_bag_json.return_value = {}
     compressed_name = "foo.tar.gz"
     mock_compress.return_value = compressed_name
+    as_data = {'display_string': 'foo'}
+    mock_as_data.return_value = as_data
     file_list = []
+
     packager.run()
+
     mock_cleanup.assert_called_once_with()
     mock_notification.assert_called_once_with()
     mock_deliver.assert_called_once_with(compressed_name)
-    mock_compress.assert_called_once_with(bag_dir)
-    mock_create.assert_called_once_with(bag_dir, packager.rights_ids)
+    mock_compress.assert_called_once_with(ANY, bag_dir, {})
+    mock_bag_json.assert_called_once_with(ANY, "foo", [])
+    mock_create.assert_called_once_with(bag_dir, packager.rights_ids, as_data)
     mock_deliver_derivatives.assert_called_once_with()
     mock_poster.assert_called_once_with(bag_dir)
     mock_parse.assert_called_once_with(file_list)
+    mock_rights_data.assert_called_once_with(packager.rights_ids, as_data)
+    mock_as_data.assert_called_once_with(as_uri)
+    mock_as_uri.assert_called_once_with(packager.refid)
     mock_move.assert_called_once_with(bag_dir)
+    mock_aquila.assert_called_once_with(aquila_baseurl)
     mock_config.assert_called_once_with(packager.ssm_parameter_path)
 
 
 @patch('src.package.Packager.get_config')
-@patch('src.package.Packager.move_to_tmp')
 @patch('src.package.Packager.cleanup_failed_job')
 @patch('src.package.Packager.deliver_failure_notification')
 def test_run_with_exception(
-        mock_notification, mock_cleanup, mock_move, mock_config):
+        mock_notification, mock_cleanup, mock_config):
     packager = Packager(*AUDIO_ARGS)
-    exception = Exception("Error moving.")
-    mock_move.side_effect = exception
+    exception = Exception("Error getting configs.")
+    mock_config.side_effect = exception
     packager.run()
     mock_cleanup.assert_called_once_with(
         Path(packager.tmp_dir, packager.refid))
     mock_notification.assert_called_once_with(exception)
     mock_config.assert_called_once_with(packager.ssm_parameter_path)
+
+
+@patch('src.package.Packager.get_date_range')
+@patch('src.package.Packager.format_aspace_date')
+@patch('src.package.find_closest_value')
+@patch('asnake.client.ASnakeClient.get')
+def test_get_as_data(mock_get, mock_find_closest, mock_dates, mock_range):
+    """Asserts data is fetched from AS as expected."""
+    as_data = {"display_string": "foobar"}
+    mock_get.return_value = MockResponse(as_data, 200)
+    packager = Packager(*AUDIO_ARGS)
+    packager.as_client = ASpace().client
+    as_uri = "/repositories/2/archival_objects/1234"
+    as_dates = ('1999-01-01', '2000-12-31')
+    mock_dates.return_value = as_dates
+    mock_range.return_value = as_dates
+
+    data = packager.get_as_data(as_uri)
+
+    assert data == {
+        'display_string': 'foobar',
+        'start_date': as_dates[0],
+        'end_date': as_dates[1],
+        'uri': as_uri
+    }
 
 
 def test_parse_format():
@@ -266,38 +300,30 @@ def test_deliver_derivatives_multiple_masters():
     assert not Path(tmp_path, "poster.png").is_file()
 
 
-@patch('src.package.Packager.get_date_range')
-@patch('src.package.Packager.format_aspace_date')
-@patch('src.package.Packager.uri_from_refid')
-@patch('src.package.find_closest_value')
-@patch('asnake.client.ASnakeClient.get')
-def test_create_bag(mock_get, mock_find_closest, mock_uri, mock_dates,
-                    mock_range, audio_packager):
+def test_create_bag(audio_packager):
     """Asserts bag is created as expected."""
-    as_data = {"display_string": "foobar"}
-    mock_get.return_value = MockResponse(as_data, 200)
-    audio_packager.as_client = ASpace().client
-    as_uri = "/repositories/2/archival_objects/1234"
-    as_dates = ('1999-01-01', '2000-12-31')
-    mock_uri.return_value = as_uri
-    mock_dates.return_value = as_dates
-    mock_range.return_value = as_dates
+    as_data = {
+        'start_date': '1999-01-01',
+        'end_date': '2000-12-31',
+        'display_string': 'foobar',
+        'uri': '/repositories/2/archival_objects/1234'
+    }
 
     fixture_path = Path('tests', 'fixtures', audio_packager.refid)
     tmp_path = Path(audio_packager.tmp_dir, audio_packager.refid)
     copytree(fixture_path, tmp_path)
 
-    audio_packager.create_bag(tmp_path, audio_packager.rights_ids)
+    audio_packager.create_bag(tmp_path, audio_packager.rights_ids, as_data)
     bag = bagit.Bag(str(tmp_path))
     assert bag.is_valid()
     for key in ['ArchivesSpace-URI', 'Start-Date',
                 'End-Date', 'Origin', 'Rights-ID', 'BagIt-Profile-Identifier']:
         assert key in bag.info
-    assert bag.info['Origin'] == 'av_digitization'
-    assert bag.info['ArchivesSpace-URI'] == as_uri
-    assert bag.info['Start-Date'] == as_dates[0]
-    assert bag.info['End-Date'] == as_dates[1]
-    assert bag.info['Rights-ID'] == AUDIO_ARGS[4].split(',')
+    assert bag.info['Origin'] == 'digitization'
+    assert bag.info['ArchivesSpace-URI'] == '/repositories/2/archival_objects/1234'
+    assert bag.info['Start-Date'] == '1999-01-01'
+    assert bag.info['End-Date'] == '2000-12-31'
+    assert bag.info['Rights-ID'] == audio_packager.rights_ids
     assert bag.info['Title'] == 'foobar'
     assert bag.info['BagIt-Profile-Identifier'] == 'zorya_bagit_profile.json'
 
@@ -354,14 +380,32 @@ def test_format_aspace_date(audio_packager):
         assert returned[1] == expected[1]
 
 
+def test_get_bag_json():
+    """Asserts bag data is structured correctly."""
+    identifier = '123456789'
+    title = 'foo'
+    rights_data = []
+    packager = Packager(*VIDEO_ARGS)
+
+    output = packager.get_bag_json(identifier, title, rights_data)
+
+    assert output == {
+        "identifier": identifier,
+        "title": title,
+        "origin": 'digitization',
+        "rights_statements": rights_data
+    }
+
+
 def test_compress_bag(audio_packager):
     """Asserts compressed files are correctly created and original directory is removed."""
     fixture_path = Path('tests', 'fixtures', audio_packager.refid)
     tmp_path = Path(audio_packager.tmp_dir, audio_packager.refid)
     copytree(fixture_path, tmp_path)
     bagit.make_bag(tmp_path)
+    bag_identifier = "123456789"
 
-    compressed = audio_packager.compress_bag(tmp_path)
+    compressed = audio_packager.compress_bag(bag_identifier, tmp_path, {})
     assert compressed.is_file()
     assert not tmp_path.exists()
 
