@@ -295,6 +295,7 @@ class Packager(object):
         root_dir = Path(self.tmp_dir, bag_identifier)
         outer_compressed_path = Path(self.tmp_dir, f"{bag_identifier}.tar.gz")
         inner_compressed_path = root_dir / f"{bag_identifier}.tar.gz"
+        logging.info(root_dir, outer_compressed_path, inner_compressed_path)
         root_dir.mkdir()
         with tarfile.open(str(inner_compressed_path), "w:gz") as tar:
             tar.add(bag_dir, arcname=bag_identifier)
@@ -318,6 +319,7 @@ class Packager(object):
         Args:
             package_path (pathlib.Path): path of compressed archive to upload.
         """
+        logging.info(package_path)
         client = self.get_client_with_role('s3', self.role_arn)
         transfer_config = boto3.s3.transfer.TransferConfig(
             multipart_threshold=1024 * 25,
