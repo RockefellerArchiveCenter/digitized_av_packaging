@@ -319,7 +319,7 @@ def test_create_bag(audio_packager):
     for key in ['ArchivesSpace-URI', 'Start-Date',
                 'End-Date', 'Origin', 'Rights-ID', 'BagIt-Profile-Identifier']:
         assert key in bag.info
-    assert bag.info['Origin'] == 'digitization'
+    assert bag.info['Origin'] == 'av_digitization'
     assert bag.info['ArchivesSpace-URI'] == '/repositories/2/archival_objects/1234'
     assert bag.info['Start-Date'] == '1999-01-01'
     assert bag.info['End-Date'] == '2000-12-31'
