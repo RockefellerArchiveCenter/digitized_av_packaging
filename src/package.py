@@ -262,7 +262,7 @@ class Packager(object):
             'ArchivesSpace-URI': as_data['uri'],
             'Start-Date': as_data['start_date'],
             'End-Date': as_data['end_date'],
-            'Origin': 'digitization',
+            'Origin': 'av_digitization',
             'Rights-ID': rights_ids,
             'Title': as_data['display_string'],
             'BagIt-Profile-Identifier': 'zorya_bagit_profile.json'}
