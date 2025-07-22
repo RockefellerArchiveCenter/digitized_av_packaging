@@ -1,9 +1,11 @@
+import json
 import logging
 import os
 import tarfile
 import traceback
 from pathlib import Path
 from shutil import copytree, rmtree
+from uuid import uuid4
 
 import bagit
 import boto3
@@ -12,6 +14,8 @@ from asnake.aspace import ASpace
 from asnake.utils import find_closest_value
 from aws_assume_role_lib import assume_role
 from dateutil import parser, relativedelta
+
+from .clients import AquilaClient
 
 logging.basicConfig(
     level=int(os.environ.get('LOGGING_LEVEL', logging.INFO)),
@@ -47,19 +51,28 @@ class Packager(object):
             f'Packaging started for package {self.refid}.')
         try:
             bag_dir = Path(self.tmp_dir, self.refid)
+            bag_identifier = str(uuid4())
             config = self.get_config(self.ssm_parameter_path)
+            aquila_client = AquilaClient(config.get('AQUILA_BASEURL'))
             self.as_client = ASpace(
                 baseurl=config.get('AS_BASEURL'),
                 username=config.get('AS_USERNAME'),
                 password=config.get('AS_PASSWORD')
             ).client
             self.as_repo = config.get('AS_REPO')
+            as_uri = self.uri_from_refid(bag_dir.name)
+            as_data = self.get_as_data(as_uri)
+            rights_data = aquila_client.get_rights_data(
+                self.rights_ids, as_data)
             self.move_to_tmp(bag_dir)
             self.format = self.parse_format(list(bag_dir.glob("*")))
             self.create_poster(bag_dir)
             self.deliver_derivatives()
-            self.create_bag(bag_dir, self.rights_ids)
-            compressed_path = self.compress_bag(bag_dir)
+            self.create_bag(bag_dir, self.rights_ids, as_data)
+            bag_json = self.get_bag_json(
+                bag_identifier, as_data['display_string'], rights_data)
+            compressed_path = self.compress_bag(
+                bag_identifier, bag_dir, bag_json)
             self.deliver_package(compressed_path)
             self.cleanup_successful_job()
             self.deliver_success_notification()
@@ -75,6 +88,27 @@ class Packager(object):
         session = boto3.Session()
         assumed_role_session = assume_role(session, role_arn)
         return assumed_role_session.client(resource)
+
+    def get_as_data(self, as_uri):
+        """Fetches data from ArchivesSpace.
+
+        Args:
+            as_uri (str): URI for archival object in ArchivesSpace.
+
+        Returns:
+            as_data (dict): formatted data from ArchivesSpace.
+        """
+        ao = self.as_client.get(as_uri).json()
+        start_date, end_date = self.get_date_range(
+            find_closest_value(ao, 'dates', self.as_client))
+        formatted_start_date, formatted_end_date = self.format_aspace_date(
+            start_date, end_date)
+        return {
+            "start_date": formatted_start_date,
+            "end_date": formatted_end_date,
+            "display_string": ao['display_string'],
+            "uri": as_uri
+        }
 
     def move_to_tmp(self, dest_dir):
         """Moves files from source directory into temporary directory
@@ -217,46 +251,66 @@ class Packager(object):
             formatted_end = end_date
         return formatted_start, formatted_end
 
-    def create_bag(self, bag_dir, rights_ids):
+    def create_bag(self, bag_dir, rights_ids, as_data):
         """Creates a BagIt bag from a directory.
-
         Args:
             bag_dir (pathlib.Path): directory containing local files.
             rights_ids (list): List of rights IDs to apply to the package.
+            as_data (dict): Data from ArchivesSpace.
         """
-        obj_uri = self.uri_from_refid(bag_dir.name)
-        as_ao = self.as_client.get(obj_uri).json()
-        start_date, end_date = self.get_date_range(
-            find_closest_value(as_ao, 'dates', self.as_client))
-        formatted_start_date, formatted_end_date = self.format_aspace_date(
-            start_date, end_date)
         metadata = {
-            'ArchivesSpace-URI': obj_uri,
-            'Start-Date': formatted_start_date,
-            'End-Date': formatted_end_date,
+            'ArchivesSpace-URI': as_data['uri'],
+            'Start-Date': as_data['start_date'],
+            'End-Date': as_data['end_date'],
             'Origin': 'av_digitization',
             'Rights-ID': rights_ids,
-            'Title': as_ao['display_string'],
+            'Title': as_data['display_string'],
             'BagIt-Profile-Identifier': 'zorya_bagit_profile.json'}
         bagit.make_bag(bag_dir, metadata)
         logging.debug(
             f'Bag created from {bag_dir} with Rights IDs {rights_ids}.')
 
-    def compress_bag(self, bag_dir):
+    def get_bag_json(self, identifier, title, rights_data):
+        return {
+            "identifier": identifier,
+            "title": title,
+            "origin": 'digitization',
+            "rights_statements": rights_data
+        }
+
+    def compress_bag(self, bag_identifier, bag_dir, bag_json):
         """Creates a compressed archive file from a bag.
 
+        This archive file contains JSON bag data, as well as another
+        archive containing the binary files as a Bagit bag.
+
         Args:
+            bag_identifier (str): newly-minted UUID for the bag.
             bag_dir (pathlib.Path): directory containing local files.
+            bag_json (dict): data about the bag to include in a JSON file.
 
         Returns:
             compressed_path (pathlib.Path): path of compressed archive.
         """
-        compressed_path = Path(f"{bag_dir}.tar.gz")
-        with tarfile.open(str(compressed_path), "w:gz") as tar:
-            tar.add(bag_dir, arcname=Path(bag_dir).name)
+        root_dir = Path(self.tmp_dir, bag_identifier)
+        outer_compressed_path = Path(self.tmp_dir, f"{bag_identifier}.tar.gz")
+        inner_compressed_path = root_dir / f"{bag_identifier}.tar.gz"
+        root_dir.mkdir()
+        with tarfile.open(str(inner_compressed_path), "w:gz") as tar:
+            tar.add(bag_dir, arcname=bag_identifier)
+        with open(Path(root_dir, f"{bag_identifier}.json"), "w") as json_file:
+            json.dump(
+                bag_json,
+                json_file,
+                indent=4,
+                sort_keys=True,
+                default=str)
+        with tarfile.open(str(outer_compressed_path), "w:gz") as tar:
+            tar.add(root_dir, arcname=bag_identifier)
         rmtree(bag_dir)
-        logging.debug(f'Compressed bag {compressed_path} created.')
-        return compressed_path
+        rmtree(root_dir)
+        logging.debug(f'Compressed bag {outer_compressed_path} created.')
+        return outer_compressed_path
 
     def deliver_package(self, package_path):
         """Delivers packaged files to destination.
