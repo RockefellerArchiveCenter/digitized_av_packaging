@@ -274,7 +274,7 @@ class Packager(object):
         return {
             "identifier": identifier,
             "title": title,
-            "origin": 'digitization',
+            "origin": 'av_digitization',
             "rights_statements": rights_data
         }
 
