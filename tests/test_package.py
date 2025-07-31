@@ -392,7 +392,7 @@ def test_get_bag_json():
     assert output == {
         "identifier": identifier,
         "title": title,
-        "origin": 'digitization',
+        "origin": 'av_digitization',
         "rights_statements": rights_data
     }
 
