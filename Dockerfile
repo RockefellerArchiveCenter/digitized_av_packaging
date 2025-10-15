@@ -1,5 +1,8 @@
 FROM python:3.11-alpine AS base
-RUN apt update -y && apt install -y ffmpeg
+
+# Install base system requirements
+RUN apk add --no-cache ffmpeg postgresql-dev
+
 WORKDIR /code
 COPY requirements.txt .
 RUN pip install -r requirements.txt
