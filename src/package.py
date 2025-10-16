@@ -193,7 +193,8 @@ class Packager(object):
 
     def uri_from_refid(self, refid):
         """Uses the find_by_id endpoint in AS to return the URI of an archival object."""
-        find_by_refid_url = f"repositories/{self.as_repo}/find_by_id/archival_objects?ref_id[]={refid}"
+        find_by_refid_url = f"repositories / {
+            self.as_repo} / find_by_id / archival_objects?ref_id[] = {refid}"
         resp = self.as_client.get(find_by_refid_url)
         resp.raise_for_status()
         results = resp.json()
@@ -354,7 +355,9 @@ class Packager(object):
         client = self.get_client_with_role('sns', self.role_arn)
         client.publish(
             TopicArn=self.sns_topic,
-            Message=f'{self.format} package {self.refid} successfully packaged',
+            Message=f'{
+                self.format} package {
+                self.refid} successfully packaged',
             MessageAttributes={
                 'format': {
                     'DataType': 'String',
@@ -385,7 +388,12 @@ class Packager(object):
         tb = ''.join(traceback.format_exception(exception)[:-1])
         client.publish(
             TopicArn=self.sns_topic,
-            Message=f'{getattr(self, "format", "unknown format")} package {self.refid} failed packaging',
+            Message=f'{
+                getattr(
+                    self,
+                    "format",
+                    "unknown format")} package {
+                self.refid} failed packaging',
             MessageAttributes={
                 'format': {
                     'DataType': 'String',
@@ -457,7 +465,8 @@ if __name__ == '__main__':
         'AWS_DESTINATION_BUCKET_AUDIO_ACCESS')
     destination_bucket_poster = os.environ.get('AWS_DESTINATION_BUCKET_POSTER')
     sns_topic = os.environ.get('AWS_SNS_TOPIC')
-    ssm_parameter_path = f"/{os.environ.get('ENV')}/{os.environ.get('APP_CONFIG_PATH')}"
+    ssm_parameter_path = f"/ {os.environ.get('ENV')
+                              } / {os.environ.get('APP_CONFIG_PATH')}"
 
     Packager(
         region,
