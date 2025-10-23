@@ -1,5 +1,8 @@
-FROM python:3.11-slim-bookworm AS base
-RUN apt update -y && apt install -y ffmpeg
+FROM python:3.12-alpine AS base
+
+# Install base system requirements
+RUN apk add --no-cache ffmpeg
+
 WORKDIR /code
 COPY requirements.txt .
 RUN pip install -r requirements.txt
