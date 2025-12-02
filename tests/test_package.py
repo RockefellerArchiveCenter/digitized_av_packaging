@@ -7,7 +7,7 @@ import bagit
 import boto3
 import pytest
 from asnake.aspace import ASpace
-from moto import mock_s3, mock_sns, mock_sqs, mock_ssm, mock_sts
+from moto import mock_aws
 from moto.core import DEFAULT_ACCOUNT_ID
 
 from src.package import Packager
@@ -15,11 +15,11 @@ from src.package import Packager
 from .helpers import MockResponse
 
 AUDIO_ARGS = ['us-east-1', 'digitized-av-packaging-role-arn', '/dev/digitized_av_packaging',
-              'b90862f3baceaae3b7418c78f9d50d52', "1,2", "tmp",
+              'b90862f3baceaae3b7418c78f9d50d52', "1,2", "/tmp",
               "source", "destination", "destination_video_mezz", "destination_video_access",
               "destination_audio_access", "destination_poster", "topic"]
 VIDEO_ARGS = ['us-east-1', 'digitized-av-packaging-role-arn', '/dev/digitized_av_packaging',
-              '20f8da26e268418ead4aa2365f816a08', "1,2", "tmp",
+              '20f8da26e268418ead4aa2365f816a08', "1,2", "/tmp",
               "source", "destination", "destination_video_mezz", "destination_video_access",
               "destination_audio_access", "destination_poster", "topic"]
 
@@ -58,8 +58,7 @@ def setup_and_teardown():
         rmtree(dir)
 
 
-@mock_ssm
-@mock_sts
+@mock_aws
 @patch('src.package.Packager.get_client_with_role')
 def test_get_config(mock_role):
     packager = Packager(*VIDEO_ARGS)
@@ -126,7 +125,7 @@ def test_run(mock_notification, mock_cleanup, mock_deliver, mock_compress, mock_
     mock_rights_data.assert_called_once_with(packager.rights_ids, as_data)
     mock_as_data.assert_called_once_with(as_uri)
     mock_as_uri.assert_called_once_with(packager.refid)
-    mock_move.assert_called_once_with(bag_dir)
+    mock_move.assert_called_once_with()
     mock_aquila.assert_called_once_with(aquila_baseurl)
     mock_config.assert_called_once_with(packager.ssm_parameter_path)
 
@@ -169,6 +168,30 @@ def test_get_as_data(mock_get, mock_find_closest, mock_dates, mock_range):
         'end_date': as_dates[1],
         'uri': as_uri
     }
+
+
+@mock_aws
+def test_move_to_tmp(audio_packager):
+    """Asserts packages are moved to temp directory as expected."""
+    tmp_path = Path(audio_packager.tmp_dir, audio_packager.refid)
+    client = boto3.client('s3')
+    client.create_bucket(Bucket=audio_packager.source_bucket)
+    fixture_path = Path('tests', 'fixtures', audio_packager.refid)
+    for dirpath, _, files in fixture_path.walk():
+        for f in files:
+            source = dirpath / f
+            destination = Path(
+                audio_packager.refid,
+                source.relative_to(fixture_path))
+            client.upload_file(
+                str(source),
+                audio_packager.source_bucket,
+                str(destination))
+
+    audio_packager.move_to_tmp()
+
+    assert tmp_path.is_dir()
+    assert len(list(tmp_path.rglob('*'))) == 2
 
 
 def test_parse_format():
@@ -227,8 +250,7 @@ def test_derivative_map_video(video_packager):
             video_packager.destination_bucket_poster, "image/x-png")]
 
 
-@mock_s3
-@mock_sts
+@mock_aws
 def test_deliver_derivatives():
     """Assert derivatives are delivered to correct buckets and deleted locally."""
     packager = Packager(*VIDEO_ARGS)
@@ -261,8 +283,7 @@ def test_deliver_derivatives():
     assert not Path(tmp_path, "poster.png").is_file()
 
 
-@mock_s3
-@mock_sts
+@mock_aws
 def test_deliver_derivatives_multiple_masters():
     """
     Assert derivatives are delivered to correct buckets and deleted
@@ -410,8 +431,7 @@ def test_compress_bag(audio_packager):
     assert not tmp_path.exists()
 
 
-@mock_s3
-@mock_sts
+@mock_aws
 def test_deliver_package():
     """Asserts compressed package is delivered and local copy is removed."""
     packager = Packager(*AUDIO_ARGS)
@@ -429,20 +449,30 @@ def test_deliver_package():
     assert not tmp_path.exists()
 
 
+@mock_aws
 def test_cleanup_successful_job(audio_packager):
     """Asserts successful job is cleaned up as expected."""
-    fixture_path = Path(
-        'tests',
-        'fixtures',
-        'b90862f3baceaae3b7418c78f9d50d52')
-    src_path = Path(audio_packager.source_dir, audio_packager.refid)
-    copytree(fixture_path, src_path)
+    client = boto3.client('s3')
+    client.create_bucket(Bucket=audio_packager.source_bucket)
+    fixture_path = Path('tests', 'fixtures', audio_packager.refid)
+    for dirpath, _, files in fixture_path.walk():
+        for f in files:
+            source = dirpath / f
+            destination = Path(
+                audio_packager.refid,
+                source.relative_to(fixture_path))
+            client.upload_file(
+                str(source),
+                audio_packager.source_bucket,
+                str(destination))
 
     audio_packager.cleanup_successful_job()
 
-    source_objects = list(src_path.glob('*'))
+    object_count = client.list_objects_v2(
+        Bucket=audio_packager.source_bucket,
+        Prefix=audio_packager.refid)['KeyCount']
 
-    assert len(source_objects) == 0
+    assert object_count == 0
 
 
 def test_cleanup_failed_job(audio_packager):
@@ -465,9 +495,7 @@ def test_cleanup_failed_job(audio_packager):
     assert not compressed_tmp_path.is_file()
 
 
-@mock_sns
-@mock_sqs
-@mock_sts
+@mock_aws
 @patch('src.package.Packager.get_client_with_role')
 def test_deliver_success_notification(mock_role):
     """Assert success notifications are delivered as expected."""
@@ -496,9 +524,7 @@ def test_deliver_success_notification(mock_role):
     assert message_body['MessageAttributes']['refid']['Value'] == packager.refid
 
 
-@mock_sns
-@mock_sqs
-@mock_sts
+@mock_aws
 @patch('src.package.Packager.get_client_with_role')
 def test_deliver_failure_notification(mock_role):
     """Asserts failure notifications are delivered as expected."""
