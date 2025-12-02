@@ -474,7 +474,7 @@ if __name__ == '__main__':
     region = os.environ.get('AWS_REGION')
     role_arn = os.environ.get('AWS_ROLE_ARN')
     tmp_dir = os.environ.get('TMP_DIR')
-    source_bucket = os.environ.get('SOURCE_BUCKET')
+    source_bucket = os.environ.get('AWS_SOURCE_BUCKET')
     destination_bucket = os.environ.get('AWS_DESTINATION_BUCKET')
     destination_bucket_video_mezzanine = os.environ.get(
         'AWS_DESTINATION_BUCKET_VIDEO_MEZZANINE')
