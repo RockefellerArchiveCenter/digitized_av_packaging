@@ -107,7 +107,7 @@ def test_run(mock_notification, mock_cleanup, mock_deliver, mock_compress, mock_
     mock_bag_json.return_value = {}
     compressed_name = "foo.tar.gz"
     mock_compress.return_value = compressed_name
-    as_data = {'display_string': 'foo'}
+    as_data = {'display_string': 'foo', 'uri': as_uri}
     mock_as_data.return_value = as_data
     file_list = []
 
@@ -117,7 +117,7 @@ def test_run(mock_notification, mock_cleanup, mock_deliver, mock_compress, mock_
     mock_notification.assert_called_once_with()
     mock_deliver.assert_called_once_with(compressed_name)
     mock_compress.assert_called_once_with(ANY, bag_dir, {})
-    mock_bag_json.assert_called_once_with(ANY, "foo", [])
+    mock_bag_json.assert_called_once_with(ANY, "foo", [], as_uri)
     mock_create.assert_called_once_with(bag_dir, packager.rights_ids, as_data)
     mock_deliver_derivatives.assert_called_once_with()
     mock_poster.assert_called_once_with(bag_dir)
@@ -406,15 +406,17 @@ def test_get_bag_json():
     identifier = '123456789'
     title = 'foo'
     rights_data = []
+    as_uri = '/repositories/2/archival_objects/1'
     packager = Packager(*VIDEO_ARGS)
 
-    output = packager.get_bag_json(identifier, title, rights_data)
+    output = packager.get_bag_json(identifier, title, rights_data, as_uri)
 
     assert output == {
         "identifier": identifier,
         "title": title,
         "origin": 'av_digitization',
-        "rights_statements": rights_data
+        "rights_statements": rights_data,
+        "archivesspace_identifier": as_uri
     }
 
 
