@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.1](https://github.com/RockefellerArchiveCenter/digitized_av_packaging/compare/v1.0.0...v1.0.1) (2026-07-06)
+
+
+### Bug Fixes
+
+* **deps:** Scheduled dependency updates ([7b80d43](https://github.com/RockefellerArchiveCenter/digitized_av_packaging/commit/7b80d4383f01f01a1dcb8cac3aff04ba71198b34))
+* **deps:** Scheduled dependency updates ([ed31f29](https://github.com/RockefellerArchiveCenter/digitized_av_packaging/commit/ed31f29d5423a3bdd63269fe863772cf457d5a26))
+* **deps:** Scheduled dependency updates ([6c82928](https://github.com/RockefellerArchiveCenter/digitized_av_packaging/commit/6c82928a0dcb662da391c91273ff035f01c7c4e7))
+* **deps:** Scheduled dependeny updates ([ed31f29](https://github.com/RockefellerArchiveCenter/digitized_av_packaging/commit/ed31f29d5423a3bdd63269fe863772cf457d5a26))
+
 ## 1.0.0 (2026-06-18)
 
 
