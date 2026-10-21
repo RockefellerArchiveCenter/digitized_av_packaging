@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.5](https://github.com/RockefellerArchiveCenter/digitized_av_packaging/compare/v1.0.4...v1.0.5) (2026-10-21)
+
+
+### Bug Fixes
+
+* pip and deps ([5ca96e5](https://github.com/RockefellerArchiveCenter/digitized_av_packaging/commit/5ca96e59b75a9f991383b9b0b10cd6d28338d1ee))
+* pip and deps ([5ca96e5](https://github.com/RockefellerArchiveCenter/digitized_av_packaging/commit/5ca96e59b75a9f991383b9b0b10cd6d28338d1ee))
+* pip and deps ([2d1c4a1](https://github.com/RockefellerArchiveCenter/digitized_av_packaging/commit/2d1c4a10dcfbf747ef7159041451a29dda7064f1))
+* pip and deps ([2d1c4a1](https://github.com/RockefellerArchiveCenter/digitized_av_packaging/commit/2d1c4a10dcfbf747ef7159041451a29dda7064f1))
+* pip and deps ([5641c54](https://github.com/RockefellerArchiveCenter/digitized_av_packaging/commit/5641c54b847d1d001eed80554633a4f419ec1c70))
+
 ## [1.0.4](https://github.com/RockefellerArchiveCenter/digitized_av_packaging/compare/v1.0.3...v1.0.4) (2026-10-05)
 
 
