@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.7](https://github.com/RockefellerArchiveCenter/digitized_av_packaging/compare/v1.0.6...v1.0.7) (2026-11-19)
+
+
+### Bug Fixes
+
+* update deploy ([ad55dc8](https://github.com/RockefellerArchiveCenter/digitized_av_packaging/commit/ad55dc8323848bab26f7dcaba1a98fb1dbfd787e))
+* update deploy ([eaffadf](https://github.com/RockefellerArchiveCenter/digitized_av_packaging/commit/eaffadf758177364df9f905690461c21e53ee32f))
+* update deploy ([13fef71](https://github.com/RockefellerArchiveCenter/digitized_av_packaging/commit/13fef71e37371052921514b24ce27dc562c62b32))
+
 ## [1.0.6](https://github.com/RockefellerArchiveCenter/digitized_av_packaging/compare/v1.0.5...v1.0.6) (2026-11-02)
 
 
